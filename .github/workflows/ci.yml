@@ -1,0 +1,59 @@
+name: CI Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      run_playwright:
+        description: 'Run Playwright e2e tests (opt-in)'
+        required: false
+        default: 'false'
+
+jobs:
+  tests:
+    name: Run unit tests and worker smoke tests
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Disable auto plugin loading (for Playwright/binaries in CI)
+        run: echo "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1" >> $GITHUB_ENV
+      - name: Run selected unit tests
+        run: |
+          python -m pytest -q tests/unit/test_llm_worker.py tests/unit/test_settings_server_status_sources.py
+      - name: Run LLM worker smoke test (once)
+        run: |
+          python scripts/run_llm_worker.py --once
+
+  playwright-tests:
+    name: Playwright e2e tests (optional)
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_playwright == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install dependencies (including playwright)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install playwright pytest-playwright
+          python -m playwright install --with-deps
+      - name: Run Playwright e2e tests
+        run: |
+          python -m pytest -q tests/e2e
