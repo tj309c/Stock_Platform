@@ -1,8 +1,20 @@
+<<<<<<< HEAD
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
+=======
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+>>>>>>> 8b6cf2a (Checkpoint: pre-github backup)
 .Python
 build/
 develop-eggs/
@@ -16,6 +28,7 @@ parts/
 sdist/
 var/
 wheels/
+<<<<<<< HEAD
 pip-wheel-metadata/
 share/python-wheels/
 *.egg-info/
@@ -44,3 +57,23 @@ venv.bak/
 *.swo
 *~
 .DS_Store
+=======
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+.venv/
+
+# Secrets - NEVER commit secrets!
+.streamlit/secrets.toml
+*.env
+
+# Cache and logs
+data/cache/
+data/logs/
+data/backups/
+.vscode/
+*.zip
+>>>>>>> 8b6cf2a (Checkpoint: pre-github backup)
