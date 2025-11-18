@@ -1,0 +1,1 @@
+"""Stock Platform - Core package."""
