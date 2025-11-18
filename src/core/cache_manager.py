@@ -49,6 +49,40 @@ class CacheManager:
     """
 
     @staticmethod
+    def cache_data(ttl: Optional[int] = None, **kwargs) -> Callable:
+        """
+        Generic cache_data decorator that wraps Streamlit's st.cache_data with TTL handling.
+        
+        Args:
+            ttl: Time to live in seconds. If None, cache persists indefinitely.
+            **kwargs: Additional arguments to pass to st.cache_data
+            
+        Returns:
+            Callable: Decorated function with caching applied
+            
+        Example:
+            @CacheManager.cache_data(ttl=3600)
+            def expensive_computation(x):
+                return x * 2
+        """
+        def decorator(func: Callable) -> Callable:
+            # Prepare cache_data arguments
+            cache_kwargs = kwargs.copy()
+            if ttl is not None:
+                cache_kwargs['ttl'] = ttl
+            
+            # Apply Streamlit's cache_data decorator
+            cached_func = st.cache_data(**cache_kwargs)(func)
+            
+            @wraps(func)
+            def wrapper(*args, **func_kwargs) -> Any:
+                return cached_func(*args, **func_kwargs)
+            
+            return wrapper
+        
+        return decorator
+
+    @staticmethod
     def cache_market_data(func: Callable) -> Callable:
         """
         Decorator for caching market data (prices, volume, OHLCV).
@@ -189,3 +223,7 @@ class CacheManager:
 def get_cache_manager() -> CacheManager:
     """Get the singleton CacheManager instance."""
     return CacheManager()
+
+
+# Module-level alias for convenience
+cache = CacheManager.cache_data
