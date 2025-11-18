@@ -1,0 +1,67 @@
+# Core Data Handling & Numerics
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Web App & UI
+streamlit>=1.28.0
+plotly>=5.17.0
+# streamlit-option-menu>=0.3.6  # Removed: Requires pyarrow which doesn't build on Python 3.14
+
+# Core Data Ingestion (APIs & Scraping)
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+lxml>=5.0.0
+
+# Financial Data APIs
+yfinance>=0.2.28
+ccxt>=4.0.0
+alpha-vantage
+fredapi>=0.5.0
+eia-python
+finnhub-python
+# financialmodelingprep-api  # removed: not present on PyPI; FMP is accessed via REST in src/pipelines/get_fmp_data.py
+
+# Social Media & News APIs
+praw>=7.7.0
+newsapi-python
+nltk>=3.9
+textblob>=0.18.0
+vaderSentiment>=3.3.2
+
+# Machine Learning & Forecasting
+scikit-learn>=1.3.0
+scipy>=1.11.0
+statsmodels
+prophet
+transformers
+torch
+
+# Financial & Risk Analysis
+ta>=0.11.0
+py_vollib>=1.0.1
+quantstats
+pypfopt>=1.5.4
+
+# Global AI Analysis
+aiohttp>=3.9.0
+openai>=1.0.0
+google-generativeai
+anthropic
+flask>=2.0.0
+flask-cors>=3.0.10
+
+# E2E Testing (optional)
+playwright>=1.40.0
+pytest-playwright>=0.5.0
+
+# Storage & Caching
+sqlalchemy>=2.0.0
+redis>=4.6.0  # Optional: needed if using REDIS_URL for the queue manager
+tomli>=2.0.0
+
+
+# Reporting & Utilities
+python-dotenv>=1.0.0
+fpdf2
+
+# pyarrow>=14.0.0  # Removed: Doesn't build on Python 3.11/Windows without extra steps
