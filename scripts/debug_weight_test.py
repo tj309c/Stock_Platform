@@ -5,6 +5,12 @@ sys.path.insert(0, str(project_root))
 from src.pipelines.get_sentiment_scraper import SentimentScraper
 import pprint
 
+import os
+
+if os.environ.get('RUN_DEBUG_SCRIPTS') != '1':
+    print('Developer-only script. Set RUN_DEBUG_SCRIPTS=1 to run this file.')
+    sys.exit(0)
+
 s = SentimentScraper()
 
 def fake_gather_with_status(self, ticker, sources=None):

@@ -26,4 +26,8 @@ def main():
     print('Job status:', j.get('status'), 'scores:', j.get('result', {}).get('scores'))
 
 if __name__ == '__main__':
+    import os, sys
+    if os.environ.get('RUN_DEBUG_SCRIPTS') != '1':
+        print("Developer-only script. Set RUN_DEBUG_SCRIPTS=1 to run this file.")
+        sys.exit(0)
     main()
