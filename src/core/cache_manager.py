@@ -16,7 +16,55 @@ class CacheManager:
     Provides static methods for caching data with configurable TTL.
     """
 
+<<<<<<< HEAD
     _cache_store = {}
+=======
+    @staticmethod
+    def cache_data(ttl: Optional[int] = None, **kwargs) -> Callable:
+        """
+        Generic cache_data decorator that wraps Streamlit's st.cache_data with TTL handling.
+        
+        Args:
+            ttl: Time to live in seconds. If None, cache persists indefinitely.
+            **kwargs: Additional arguments to pass to st.cache_data
+            
+        Returns:
+            Callable: Decorated function with caching applied
+            
+        Example:
+            @CacheManager.cache_data(ttl=3600)
+            def expensive_computation(x):
+                return x * 2
+        """
+        def decorator(func: Callable) -> Callable:
+            # Prepare cache_data arguments
+            cache_kwargs = kwargs.copy()
+            if ttl is not None:
+                cache_kwargs['ttl'] = ttl
+            
+            # Apply Streamlit's cache_data decorator
+            cached_func = st.cache_data(**cache_kwargs)(func)
+            
+            @wraps(func)
+            def wrapper(*args, **func_kwargs) -> Any:
+                return cached_func(*args, **func_kwargs)
+            
+            return wrapper
+        
+        return decorator
+
+    @staticmethod
+    def cache_market_data(func: Callable) -> Callable:
+        """
+        Decorator for caching market data (prices, volume, OHLCV).
+        TTL: 5 minutes
+        """
+        @st.cache_data(ttl=CacheConfig.MARKET_DATA_TTL, show_spinner=False)
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            return func(*args, **kwargs)
+        return wrapper
+>>>>>>> c256e4d (Add generic cache_data method and module-level cache alias with tests)
 
     @staticmethod
     def cache_data(
@@ -88,5 +136,14 @@ class CacheManager:
             CacheManager._cache_store.clear()
 
 
+<<<<<<< HEAD
+=======
+# Convenience function for quick access
+def get_cache_manager() -> CacheManager:
+    """Get the singleton CacheManager instance."""
+    return CacheManager()
+
+
+>>>>>>> c256e4d (Add generic cache_data method and module-level cache alias with tests)
 # Module-level alias for convenience
 cache = CacheManager.cache_data

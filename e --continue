@@ -1,0 +1,4 @@
+.streamlit/secrets.toml.template
+data/logs/codecheck_report.json
+scripts/setup_venv.bat
+tests/unit/test_cache_manager_imports.py
