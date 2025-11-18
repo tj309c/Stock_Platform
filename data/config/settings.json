@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "scopes": {
+    "global": {
+      "Finviz": 0.4,
+      "Yahoo": 0.4,
+      "SEC": 0.2
+    }
+  }
+}
