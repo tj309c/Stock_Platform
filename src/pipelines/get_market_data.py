@@ -26,23 +26,32 @@ class MarketDataPipeline:
     def get_stock_price(
         _self,
         ticker: str,
-        period: str = "1y",
-        interval: str = "1d"
+        period: Optional[str] = "1y",
+        interval: str = "1d",
+        start: Optional[str] = None,
+        end: Optional[str] = None
     ) -> Optional[pd.DataFrame]:
         """
         Fetch historical price data for a stock.
 
         Args:
             ticker: Stock ticker symbol
-            period: Data period (1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max)
-            interval: Data interval (1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo)
+            period: Data period (e.g., "1y"), used if start/end are not provided.
+            interval: Data interval (e.g., "1d").
+            start: Start date (YYYY-MM-DD).
+            end: End date (YYYY-MM-DD).
 
         Returns:
             DataFrame with OHLCV data or None if error
         """
         try:
             stock = yf.Ticker(ticker)
-            df = stock.history(period=period, interval=interval)
+            
+            # If start or end date is provided, yfinance requires period to be None.
+            effective_period = period
+            if start is not None or end is not None:
+                effective_period = None
+            df = stock.history(period=effective_period, interval=interval, start=start, end=end)
 
             if df.empty:
                 st.warning(f"No data found for ticker: {ticker}")
@@ -380,6 +389,87 @@ class MarketDataPipeline:
 
         except:
             return False
+
+    @CacheManager.cache_market_data
+    def get_historical_pe_ratio(_self, ticker: str, period: str = "1y", interval: str = "1d") -> Optional[pd.DataFrame]:
+        """
+        Compute an approximate historical P/E ratio time series using yfinance data.
+
+        Strategy:
+        - Fetch price history for the provided period/interval.
+        - Use quarterly earnings (`stock.quarterly_earnings`) if available to compute EPS per quarter.
+          Convert earnings into EPS by dividing by shares outstanding, build a TTM EPS by summing
+          the last 4 quarters, and forward-fill to the price index.
+        - If quarterly earnings are not available, fallback to `info['trailingEps']` as a constant.
+        - Return a DataFrame with 'peRatio' column mapped to the price index.
+        """
+        try:
+            # Debug logging
+            print(f"DEBUG: Computing historical P/E for {ticker} (period={period}, interval={interval})")
+            stock = yf.Ticker(ticker)
+            price_df = _self.get_stock_price(ticker, period=period, interval=interval)
+            if price_df is None or price_df.empty:
+                print("DEBUG: price_df empty or None")
+                return None
+
+            company_info = _self.get_company_info(ticker)
+            shares_outstanding = company_info.get('sharesOutstanding') if company_info else None
+
+            # --- Primary Strategy: Use quarterly financials to build TTM EPS ---
+            financials = _self.get_financials(ticker)
+            qfin = financials.get('quarterly_income_statement') if financials else None
+
+            if qfin is not None and not qfin.empty:
+                eps_per_q = None
+                # Prefer direct EPS data if available
+                if 'Basic EPS' in qfin.index:
+                    eps_per_q = qfin.loc['Basic EPS']
+                elif 'Diluted EPS' in qfin.index:
+                    eps_per_q = qfin.loc['Diluted EPS']
+                # Fallback to calculating from Net Income
+                elif 'Net Income' in qfin.index and shares_outstanding:
+                    eps_per_q = qfin.loc['Net Income'] / shares_outstanding
+
+                if eps_per_q is not None:
+                    # Calculate TTM EPS by summing the last 4 quarters
+                    ttm_eps = eps_per_q.rolling(window=4, min_periods=1).sum()
+
+                    # Create a daily EPS series by forward-filling the quarterly TTM data
+                    price_idx = price_df.index.tz_localize(None) # Ensure tz-naive for join
+                    ttm_eps.index = pd.to_datetime(ttm_eps.index).tz_localize(None)
+                    
+                    daily_ttm_eps = ttm_eps.reindex(price_idx, method='ffill')
+
+                    # Calculate P/E ratio
+                    pe_series = price_df['Close'] / daily_ttm_eps
+                    pe_series = pe_series.replace([np.inf, -np.inf], pd.NA) # Handle division by zero
+                    pe_series[pe_series <= 0] = pd.NA # P/E is not meaningful for negative earnings
+                    return pd.DataFrame({'peRatio': pe_series})
+
+            # Fallback: use trailing EPS as a constant series
+            trailing_eps = None
+            if company_info:
+                trailing_eps = company_info.get('trailingEps')
+            else:
+                # fallback if direct stock.info exists
+                trailing_eps = getattr(stock, 'info', {}).get('trailingEps') if getattr(stock, 'info', None) else None
+            print('DEBUG: trailing_epsilon:', trailing_eps)
+            if trailing_eps is not None:
+                pe_series = price_df['Close'] / float(trailing_eps)
+                pe_series = pe_series.replace([np.inf, -np.inf], pd.NA)
+                pe_series[pe_series <= 0] = pd.NA
+                return pd.DataFrame({'peRatio': pe_series})
+
+            # If nothing available, return None
+            return None
+
+        except Exception as e:
+            # Print stack for debugging in dev environment; still return None gracefully
+            import traceback
+            print("ERROR computing historical P/E:", e)
+            traceback.print_exc()
+            st.warning(f"Error computing historical P/E for {ticker}: {str(e)}")
+            return None
 
 
 # Convenience functions for quick access
