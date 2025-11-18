@@ -38,3 +38,4 @@ data/logs/
 data/backups/
 .vscode/
 *.zip
+secrets.toml.template
