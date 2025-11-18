@@ -39,8 +39,4 @@ venv.bak/
 
 # IDE
 .vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
+*.zip
