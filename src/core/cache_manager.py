@@ -39,17 +39,10 @@ class CacheManager:
         def decorator(func: Callable) -> Callable:
             # Prepare cache_data arguments
             cache_kwargs = kwargs.copy()
-            if ttl is not None:
-                cache_kwargs['ttl'] = ttl
+            cache_kwargs['ttl'] = ttl
             
-            # Apply Streamlit's cache_data decorator
-            cached_func = st.cache_data(**cache_kwargs)(func)
-            
-            @wraps(func)
-            def wrapper(*args, **func_kwargs) -> Any:
-                return cached_func(*args, **func_kwargs)
-            
-            return wrapper
+            # Apply Streamlit's cache_data decorator and return directly
+            return st.cache_data(**cache_kwargs)(func)
         
         return decorator
 
