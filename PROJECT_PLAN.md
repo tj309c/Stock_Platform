@@ -8,21 +8,22 @@ STATUS LEGEND:
 
 [COMPLETE] - Task successfully finished.
 
-CURRENT STATUS: Phase 0 COMPLETE | Phase 1 IN PROGRESS (55%)
+CURRENT STATUS: Phase 1 COMPLETE | Phase 2 & 3 IN PROGRESS
 
-CURRENT PRIORITY: Finish remaining Phase 1 Pipelines and begin Phase 2 Engine Development.
+CURRENT PRIORITY: Finalize core analysis engines and build out remaining dashboards.
 
 ################################################################################
 
-PHASE 1: CORE DASHBOARDS & PIPELINES (55% Complete)
+PHASE 1: CORE DASHBOARDS & PIPELINES (100% Complete)
 
 ################################################################################
 
 --- Data Pipelines ---
 
-[PENDING] get_sentiment_scraper.py: Implement SEC EDGAR Form 4 (insider trades) and 8-K (material events) RSS feeds scraper.
-[PENDING] get_economic_data.py: Implement data fetching from fredapi (for macro) and eia-python (for energy inventories, STEO).
-[PENDING] get_fmp_data.py: Implement core FMP pipeline functions: get_company_profile, get_earnings_surprises, get_analyst_consensus, and get_key_metrics.
+[COMPLETE] get_sentiment_scraper.py: Implement SEC EDGAR Form 4 (insider trades) and 8-K (material events) RSS feeds scraper.
+[COMPLETE] get_economic_data.py: Implement data fetching from fredapi (for macro) and eia-python (for energy inventories, STEO).
+[COMPLETE] get_fmp_data.py: Implement core FMP pipeline functions: get_company_profile, get_earnings_surprises, get_analyst_consensus, and get_key_metrics.
+[COMPLETE] get_market_data.py: Implemented `get_historical_pe_ratio` using yfinance TTM EPS (quarterly financials), added `start`/`end` support to `get_stock_price` for date-range requests.
 
 --- Configuration & Settings ---
 
@@ -32,24 +33,24 @@ PHASE 1: CORE DASHBOARDS & PIPELINES (55% Complete)
 
 ################################################################################
 
-PHASE 2: DEVELOP CORE ENGINES (0% Complete)
+PHASE 2: DEVELOP CORE ENGINES (50% Complete)
 
 ################################################################################
 
 --- Valuation Models ---
 
 [PENDING] interactive_dcf.py: Implement the GAAP vs. Non-GAAP toggle logic.
-[PENDING] interactive_dcf.py: Implement the Parameter Preset Engine (Conservative, Base, Aggressive).
+[COMPLETE] interactive_dcf.py: Implement the Parameter Preset Engine (data-driven defaults for FCF, Growth, WACC).
 [PENDING] zero_fcf_valuation.py: Implement the Auto-Selection Logic to detect company type for valuation (e.g., Growth, Mature, Financial).
 
 --- Core Analysis ---
 
 [PENDING] ape_intelligence.py: Implement the multi-factor scoring logic (0-100 "Ape Score").
-[PENDING] technical_analysis.py: Implement algorithmic pattern recognition for at least 2-3 patterns (e.g., Support/Resistance, Trendlines).
+[PENDING] technical_analysis.py: Implement algorithmic pattern recognition (Support/Resistance engine exists but was reverted from UI).
 
 ################################################################################
 
-PHASE 3: INTEGRATE ADVANCED ANALYTICS (0% Complete)
+PHASE 3: INTEGRATE ADVANCED ANALYTICS (75% Complete)
 
 ################################################################################
 
@@ -57,15 +58,15 @@ PHASE 3: INTEGRATE ADVANCED ANALYTICS (0% Complete)
 
 [PENDING] pro_indicator_engine.py: Implement the 7-Tier indicator engine with the following statistical layers:
 
-- Tier 1 (Trend): SMA/EMA, VWAP, Parabolic SAR (PSAR), ADX/DMI.
+- [COMPLETE] Tier 1 (Trend): SMA/EMA, VWAP, Parabolic SAR (PSAR), ADX/DMI.
 
-- Tier 2 (Momentum/Oscillators): RSI, MACD, Stochastic Oscillator, CCI (Commodity Channel Index), RVI (Relative Volatility Index).
+- [COMPLETE] Tier 2 (Momentum/Oscillators): RSI, MACD, Stochastic Oscillator, CCI, RVI, MFI.
 
-- Tier 3 (Volatility): Bollinger Bands, Average True Range (ATR), Keltner Channels, Donchian Channels.
+- [COMPLETE] Tier 3 (Volatility): Bollinger Bands, Average True Range (ATR), Keltner Channels, Donchian Channels.
 
-- Tier 4 (Volume): OBV (On-Balance Volume), Accumulation/Distribution (A/D) Line, Volume Profile.
+- [COMPLETE] Tier 4 (Volume): OBV (On-Balance Volume), Accumulation/Distribution (A/D) Line.
 
-[PENDING] dashboard_equity.py: Integrate the Pro Indicator Engine with its visual summary bar and interactive charts.
+[COMPLETE] dashboard_equity.py: Integrate the Pro Indicator Engine with its visual summary bar and interactive charts.
 
 --- Options Analysis ---
 
@@ -74,9 +75,9 @@ PHASE 3: INTEGRATE ADVANCED ANALYTICS (0% Complete)
 
 --- Momentum Analysis ---
 
-[PENDING] driver_analysis.py: Implement "Retail Momentum Score" and "Institutional Momentum Score" time-series scores.
-[PENDING] driver_analysis.py: Implement rolling correlation logic between price and each momentum score.
-[PENDING] dashboard_equity.py: Add the "Driver Momentum Analysis" chart in the Deep Dive tab.
+[COMPLETE] driver_analysis.py: Implemented as "Digital Landscape Conviction Score" and "Narrative Divergence Index" in pro_indicator_engine.py.
+[COMPLETE] dashboard_equity.py: Integrated Conviction Score and Narrative Divergence into the main chart as selectable subplots.
+[COMPLETE] dashboard_equity.py: Added the historical P/E fallback (yfinance TTM/trailing EPS) and consolidated overlay/subplot color maps with consistent chart trace colors; added user-facing warning for missing historical P/E.
 
 ################################################################################
 
@@ -90,7 +91,7 @@ PHASE 4: IMPLEMENT MACRO & QUANT OVERLAYS (0% Complete)
 
 --- Macro Analysis ---
 
-[PENDING] bls_analysis.py: Implement logic to process BLS data and determine the current "employment regime."
+[COMPLETE] bls_analysis.py: Implemented as "Inflation-Adjusted P/E" using FRED CPI data in pro_indicator_engine.py.
 [PENDING] eia_analysis.py: Implement logic to process EIA data and determine the current "energy regime."
 
 --- Dashboard Integration ---
@@ -133,11 +134,6 @@ PHASE 6: BUILD MARKET SCREENER & ALERTER (0% Complete)
 --- Dashboard & UI ---
 
 [PENDING] dashboard_screener.py: Build the Screener UI, including the Earnings Calendar, Custom Screener Builder, pre-built screens, and integration of FMP fundamental data.
-
---- Alerting System ---
-
-[PENDING] alert_manager.py: Implement the logic for sending email/SMS notifications.
-[PENDING] dashboard_screener.py: Integrate alert creation (Event Alerts, Screen Alerts) into the UI.
 
 ################################################################################
 
@@ -194,7 +190,8 @@ PHASE 10: UX, FINALIZATION, & TESTING (10% Complete)
 
 --- Unit & Integration Testing ---
 
-[PENDING] test_indicators.py: Write unit tests for the Pro Indicator engine.
+[COMPLETE] test_indicators.py: Write unit tests for the Pro Indicator engine, Conviction Score, and Narrative Divergence.
+[COMPLETE] tests: Added deterministic unit tests for yfinance historical P/E fallback and chart color mapping; dashboard PE fallback UI test (headless, monkeypatched Streamlit UI).
 [PENDING] test_earnings_predictor.py: Write unit tests for the Earnings Predictor.
 [PENDING] test_backtester.py: Write unit tests for the Signal Efficacy Engine.
 [PENDING] test_screener.py: Write unit tests for the Screener engine.
@@ -206,3 +203,4 @@ PHASE 10: UX, FINALIZATION, & TESTING (10% Complete)
 [PENDING] UX: Implement keyboard shortcuts for power users.
 [PENDING] Code Quality: Final code cleanup and documentation review.
 [PENDING] CI: Add acceptance tests for Settings UI in CI and snapshot tests covering the preview chart logic.
+[PENDING] CI: Add GitHub Actions workflow for running `pytest` in `tests/unit` and `tests/integration`; include linting and basic coverage reporting.

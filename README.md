@@ -26,6 +26,36 @@ Portfolio Optimization: Modern Portfolio Theory with efficient frontier analysis
 
 The platform is built around 7 specialized dashboards, a consistent design_system (ThemeManager, MetricCardRenderer), an ambient "AI Co-pilot," and a final, exportable report.
 
+---
+## Recent Additions (Nov 18, 2025)
+
+- Historical P/E fallback: The platform now computes an approximate historical P/E time series using yfinance if third-party fundamental APIs (like FMP) are unavailable. It attempts to compute a TTM EPS series from quarterly financials (Net Income / Shares Outstanding) and falls back to a trailing EPS constant when needed. The function is available at `src/pipelines/get_market_data.py::get_historical_pe_ratio`.
+- Chart & UX: Overlay and subplot control labels are now color-synced to their Plotly traces. Overlay and subplot color maps were centralized as class-level constants so the UI and the chart trace colors remain consistent across the app.
+- Dashboard Improvements: The `EquityDashboard` now merges the computed historical P/E into the chart if FMP data is unavailable and emits a small user-facing warning when P/E is missing.
+- Utilities & Tests: A script `scripts/compute_historical_pe.py` allows export of computed historical P/E series for a ticker (CSV). Deterministic unit tests were added for the new fallback and chart color mapping under `tests/unit`.
+
+---
+## Developer Quick Start (Testing & Dev)
+
+Run unit tests locally:
+```bash
+python -m pytest -q tests/unit -q -vv
+```
+
+Run the Streamlit app for local manual testing (Dev mode):
+```bash
+streamlit run main.py
+```
+
+Compute and export historical P/E locally (example for AAPL):
+```bash
+python scripts/compute_historical_pe.py AAPL --period 2y --interval 1d --out aapl_pe.csv
+```
+
+Notes:
+- The `get_historical_pe_ratio` function uses `MarketDataPipeline.get_stock_price` so network and caching behavior is consistent across pipelines.
+- Unit tests that interact with network data are deterministic using monkeypatch (no network call should be required for `tests/unit`). Integration tests can be added separately for CI.
+
 1. The AI Co-pilot
 
 An ambient, multi-model AI (using Claude, GPT-4, Gemini, and Grok) provides contextual insights.
