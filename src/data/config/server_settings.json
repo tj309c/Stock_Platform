@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "scopes": {
+    "equity": {
+      "scoring_mode": "vader",
+      "weights": {
+        "Finviz": 0.5,
+        "MarketWatch": 0.0,
+        "SEC": 0.0,
+        "Yahoo": 0.5
+      }
+    }
+  }
+}
