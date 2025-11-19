@@ -77,6 +77,12 @@ class _Ticker:
 
 yfinance = types.ModuleType('yfinance')
 yfinance.Ticker = _Ticker
+# Emulate a real module spec so libraries like pandas_ta that check __spec__ don't fail
+try:
+    import importlib.machinery as _machinery
+    yfinance.__spec__ = _machinery.ModuleSpec('yfinance', loader=None)
+except Exception:
+    yfinance.__spec__ = None
 sys.modules['yfinance'] = yfinance
 
 # Minimal fake openai module for unit tests that want to patch ChatCompletion.create

@@ -522,15 +522,24 @@ Note: Streamlit loads secrets from `.streamlit/secrets.toml`. If you keep your c
 
 Coinbase (CCXT) Credentials
 --------------------------------
-If you want to use private, authenticated Coinbase endpoints (e.g., detailed orderbooks or account-specific endpoints), provide credentials in `.streamlit/secrets.toml` as follows:
+If you want to use private, authenticated Coinbase endpoints (e.g., detailed orderbooks or account-specific endpoints), provide credentials in `.streamlit/secrets.toml` as follows (preferred names):
 
 ```toml
-COINBASE_API_KEY = "your_coinbase_api_key"
+COINBASE_API_NAME = "your_coinbase_api_key"  # preferred name
+COINBASE_PRIVATE_KEY = "your_coinbase_api_secret"  # preferred name for the secret / private key
+COINBASE_API_PASSWORD = "your_coinbase_api_password"  # passphrase if applicable
 COINBASE_API_SECRET = "your_coinbase_api_secret"
 COINBASE_API_PASSWORD = "your_coinbase_password"  # if required
 ```
 
 For local development scripts that are not part of the Streamlit application, you can also use a `.env` file at the project root. This file is ignored by Git and is a secure way to store your keys.
+
+Backwards compatibility: The application supports legacy environment variable names for Coinbase for convenience. If you still use the old keys, they will be read as follows:
+- `COINBASE_API_KEY` -> `coinbase_api_name` (legacy)
+- `COINBASE_API_SECRET` -> `coinbase_private_key` (legacy secret name)
+- `COINBASE_API_PASSWORD` / `COINBASE_PASSPHRASE` -> `coinbase_api_password`
+
+We recommend using the newer keys (`COINBASE_API_NAME`, `COINBASE_PRIVATE_KEY`, `COINBASE_API_PASSWORD`) going forward for clarity, but legacy names will still work.
 
 Example `.env` file:
 

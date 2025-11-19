@@ -98,9 +98,9 @@ def check_fmp_key() -> bool:
 
 
 def check_coinbase_key() -> bool:
-    env_key = os.getenv("COINBASE_API_KEY")
+    env_key = os.getenv("COINBASE_API_NAME") or os.getenv("COINBASE_API_KEY")
     if env_key:
-        print("COINBASE_API_KEY found in environment variables.")
+        print("COINBASE API key found in environment variables (COINBASE_API_NAME/COINBASE_API_KEY).")
         return True
     if SECRETS_TOML.exists():
         try:
@@ -130,13 +130,13 @@ def check_coinbase_key() -> bool:
                 parsed['COINBASE_API_SECRET'] = m_secret.group(1).strip()
 
         # Regardless of whether parsing succeeded, check the parsed dict for keys
-        if parsed.get("COINBASE_API_KEY"):
-            print("COINBASE_API_KEY found in .streamlit/secrets.toml")
+        if parsed.get("COINBASE_API_NAME") or parsed.get("COINBASE_API_KEY"):
+            print("COINBASE API key found in .streamlit/secrets.toml (COINBASE_API_NAME/COINBASE_API_KEY)")
             ck = parsed.get("COINBASE_API_KEY")
             if isinstance(ck, str) and ck.startswith("organizations/"):
                 print("  -> NOTE: This looks like a Coinbase Cloud organization API key (starts with 'organizations/').")
                 print("     CCXT may not support Coinbase Cloud keys. Consider creating a classic API key pair for CCXT or using Coinbase Cloud SDK.")
-            cs = parsed.get("COINBASE_API_SECRET")
+            cs = parsed.get("COINBASE_PRIVATE_KEY") or parsed.get("COINBASE_API_SECRET")
             if isinstance(cs, str) and "BEGIN" in cs and "PRIVATE KEY" in cs:
                 print("  -> NOTE: COINBASE_API_SECRET looks like a PEM private key (BEGIN ... PRIVATE KEY). CCXT typically expects a simple API secret string, not a PEM file.")
             return True

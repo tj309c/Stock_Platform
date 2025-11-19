@@ -37,10 +37,11 @@ class AppConfig:
     REDIS_URL = None
 
     def __init__(self):
-        # Ensure cache directory exists
+        # ensure cache directory exists
         self.CACHE_DIR.mkdir(parents=True, exist_ok=True)
         # expose secrets for convenience (st.secrets may be a dict-like object)
-        # secrets = st.secrets # This line is not used, can be removed if desired.
+        # Expose the Streamlit secrets object for compatibility with code expecting cfg.secrets
+        self.secrets = st.secrets
 
         # --- LLM API Keys ---
         self.anthropic_api_key = st.secrets.get("ANTHROPIC_API_KEY")
