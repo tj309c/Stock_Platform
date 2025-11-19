@@ -8,16 +8,8 @@ REM  - LLM Worker (queue worker)
 REM Optionally update the following environment variables before starting
 SET "SETTINGS_SERVER_PORT=5001"
 SET "STREAMLIT_PORT=8501"
-REM Prefer venv python if available
-SET "SCRIPT_DIR=%~dp0"
-REM Check common virtual environment names
-SET "VENV_PY=%SCRIPT_DIR%..\.venv\Scripts\python.exe"
-IF NOT EXIST "%VENV_PY%" (
-	SET "VENV_PY=%SCRIPT_DIR%..\venv\Scripts\python.exe"
-)
-IF NOT EXIST "%VENV_PY%" (
-	SET "VENV_PY=python"
-)
+REM Prefer venv python if available and set VENV_PY via helper
+call "%~dp0\venv_helpers.bat"
 
 echo Starting dev environment...
 
@@ -32,3 +24,9 @@ start "LLMWorker" cmd /k "%VENV_PY% scripts\run_llm_worker.py"
 
 echo Dev environment started. Press any key to exit this launcher window.
 pause >nul
+REM Check secrets file and warn if missing to avoid silent auth failures (no migration)
+IF NOT EXIST "%CD%\.streamlit\secrets.toml" (
+	echo.
+	echo [WARNING] .streamlit\secrets.toml not found. Authenticated features may not work.
+	echo [TIP] Use scripts\run_app_with_venv.bat dev migrate to migrate repo-root secrets if you need a quick import.
+)

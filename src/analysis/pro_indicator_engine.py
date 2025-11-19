@@ -29,27 +29,42 @@ class ProIndicatorEngine:
 
         data = price_data.copy()
 
-        # Define the strategy as a list of indicator dictionaries.
-        # This is the modern approach for pandas-ta versions > 0.3.14b0
+        # Define the full strategy based on PROJECT_PLAN.md (Tiers 1-4)
         strategy_definition = [
-            {"kind": "sma", "length": 50},
-            {"kind": "ema", "length": 20},
-            {"kind": "rsi"},
-            {"kind": "macd"},
+            # Tier 1 (Trend)
+            {"kind": "sma", "length": 50}, {"kind": "ema", "length": 20},
+            {"kind": "vwap"},
+            {"kind": "psar"},
+            {"kind": "adx"},
+
+            # Tier 2 (Momentum/Oscillators)
+            {"kind": "rsi"}, {"kind": "macd"}, {"kind": "stoch"},
+            {"kind": "cci"},
+            {"kind": "rvi"},
+
+            # Tier 3 (Volatility)
             {"kind": "bbands", "length": 20},
-            {"kind": "atr", "length": 14},      # Average True Range
-            {"kind": "stoch"},                  # Stochastic Oscillator (%K, %D)
+            {"kind": "atr", "length": 14},
+            {"kind": "kc"},
+            {"kind": "donchian"},
+
+            # Tier 4 (Volume)
+            {"kind": "obv"},
+            {"kind": "ad"},
+            # Volume Profile is complex and not a standard pandas-ta indicator, requires separate implementation
         ]
 
-        # Try to create and run a pandas-ta Strategy when available
-        if hasattr(ta, 'Strategy'):
-            try:
-                MyStrategy = ta.Strategy(name="Common Indicators", ta=strategy_definition)
-                data.ta.strategy(MyStrategy)
-            except Exception:
-                # Fall back to manual indicator calculation
-                pass
-        else:
+        try:
+            # Try to create and run a pandas-ta Strategy (modern, optimized approach)
+            if not hasattr(ta, 'Strategy'):
+                raise AttributeError("pandas-ta version does not support Strategy.")
+            
+            MyStrategy = ta.Strategy(name="Pro Indicator Strategy", ta=strategy_definition)
+            data.ta.strategy(MyStrategy)
+
+        except Exception as e:
+            # If Strategy fails or is unavailable, fall back to manual calculation.
+            # This makes the logic robust and avoids silent failures.
             # pandas_ta version doesn't expose Strategy; calculate indicators manually.
             # Prefer using DataFrame.ta methods when present, otherwise fall back to pandas/numpy implementations.
             # SMA
@@ -142,4 +157,5 @@ class ProIndicatorEngine:
                     data['STOCHd_14_3_3'] = data['STOCH_D']
             except Exception:
                 pass
+
         return data

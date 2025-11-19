@@ -1,9 +1,9 @@
 """
 Simple secrets format checker for .streamlit/secrets.toml to be used as a diagnostic
 or pre-commit hook. Flags common misconfiguration problems:
- - Coinbase API key starting with organizations/ (Cloud-style)
- - Coinbase secret containing PEM (BEGIN ... PRIVATE KEY)
- - Coinbase secret equal to API key (likely a paste error)
+ - Binance API key starting with organizations/ (Cloud-style) or Coinbase org-style keys (legacy)
+ - Exchange secret containing PEM (BEGIN ... PRIVATE KEY)
+ - Exchange secret equal to API key (likely a paste error)
 
 Usage:
   python scripts/check_secrets_format.py
@@ -24,12 +24,28 @@ DEFAULT_SECRETS_FILE = ROOT / ".streamlit" / "secrets.toml"
 def raw_scan_text(text: str) -> dict:
     # find likely keys via regex
     data = {}
-    m_key = re.search(r'COINBASE_API_NAME\s*=\s*"([^"]+)"', text) or re.search(r'COINBASE_API_KEY\s*=\s*"([^"]+)"', text)
-    m_secret = re.search(r'COINBASE_PRIVATE_KEY\s*=\s*"([^"]+)"', text) or re.search(r'COINBASE_API_SECRET\s*=\s*"([\s\S]*?)"', text)
+    # Prefer KRAKEN keys for detection; fall back to BINANCE/COINBASE legacy names
+    m_key = (
+        re.search(r'KRAKEN_API_NAME\s*=\s*"([^"]+)"', text)
+        or re.search(r'KRAKEN_API_KEY\s*=\s*"([^"]+)"', text)
+        or re.search(r'BINANCE_API_NAME\s*=\s*"([^"]+)"', text)
+        or re.search(r'BINANCE_API_KEY\s*=\s*"([^"]+)"', text)
+        or re.search(r'COINBASE_API_NAME\s*=\s*"([^"]+)"', text)
+        or re.search(r'COINBASE_API_KEY\s*=\s*"([^"]+)"', text)
+    )
+    m_secret = (
+        re.search(r'KRAKEN_PRIVATE_KEY\s*=\s*"([^"]+)"', text)
+        or re.search(r'KRAKEN_API_SECRET\s*=\s*"([\s\S]*?)"', text)
+        or re.search(r'BINANCE_PRIVATE_KEY\s*=\s*"([^"]+)"', text)
+        or re.search(r'BINANCE_API_SECRET\s*=\s*"([\s\S]*?)"', text)
+        or re.search(r'COINBASE_PRIVATE_KEY\s*=\s*"([^"]+)"', text)
+        or re.search(r'COINBASE_API_SECRET\s*=\s*"([\s\S]*?)"', text)
+    )
     if m_key:
-        data['COINBASE_API_KEY'] = m_key.group(1)
+        # Normalize to KRAKEN_* names so subsequent checks prefer Kraken keys
+        data['KRAKEN_API_KEY'] = m_key.group(1)
     if m_secret:
-        data['COINBASE_API_SECRET'] = m_secret.group(1).strip()
+        data['KRAKEN_API_SECRET'] = m_secret.group(1).strip()
     return data
 
 
@@ -57,24 +73,39 @@ def run_check(secrets_file: Path | None = None) -> int:
         print("No .streamlit/secrets.toml found or file could not be parsed; skipping checks.")
         return 0
 
-    ckey = parsed.get('COINBASE_API_NAME') or parsed.get('COINBASE_API_KEY')
-    csec = parsed.get('COINBASE_PRIVATE_KEY') or parsed.get('COINBASE_API_SECRET')
+    # Prefer KRAKEN keys for checks, but also accept BINANCE/COINBASE legacy names
+    ckey = (
+        parsed.get('KRAKEN_API_NAME')
+        or parsed.get('KRAKEN_API_KEY')
+        or parsed.get('BINANCE_API_NAME')
+        or parsed.get('BINANCE_API_KEY')
+        or parsed.get('COINBASE_API_NAME')
+        or parsed.get('COINBASE_API_KEY')
+    )
+    csec = (
+        parsed.get('KRAKEN_PRIVATE_KEY')
+        or parsed.get('KRAKEN_API_SECRET')
+        or parsed.get('BINANCE_PRIVATE_KEY')
+        or parsed.get('BINANCE_API_SECRET')
+        or parsed.get('COINBASE_PRIVATE_KEY')
+        or parsed.get('COINBASE_API_SECRET')
+    )
 
     # Check for org key
     if ckey and isinstance(ckey, str) and ckey.startswith('organizations/'):
-        print('WARNING: COINBASE_API_KEY looks like a Coinbase Cloud organization key (starts with organizations/).')
-        print('  > CCXT may not support org-style keys for authenticated requests; consider creating a classic API key for CCXT or use Coinbase Cloud SDK.')
+        print('WARNING: Exchange API key looks like an organization-style key (starts with organizations/).')
+        print('  > CCXT may not support org-style keys for authenticated requests; consider creating a classic API key for CCXT or using the vendor SDK for org-style keys.')
         errs += 1
 
     # Check for PEM secret
     if csec and isinstance(csec, str) and ('BEGIN' in csec and 'PRIVATE KEY' in csec):
-        print('WARNING: COINBASE_API_SECRET looks like a PEM private key (BEGIN ... PRIVATE KEY)')
-        print('  > CCXT expects a plain API secret for classic keys; use triple-quoted TOML strings or consider classic keys for CCXT.')
+        print('WARNING: Exchange private key looks like a PEM private key (BEGIN ... PRIVATE KEY)')
+        print('  > CCXT expects a plain API secret for classic keys; triple-quoted TOML strings are a valid way to store PEM in TOML for migration. For CCXT classic keys, prefer a plaintext secret.')
         errs += 1
 
     # Check for paste error (secret equals key)
     if ckey and csec and ckey == csec:
-        print('ERROR: COINBASE_API_SECRET appears to equal the API key (paste error). Please fix.')
+        print('ERROR: Exchange secret appears to equal the API key (paste error). Please fix.')
         errs += 1
 
     if errs == 0:

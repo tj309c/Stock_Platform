@@ -10,12 +10,139 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from src.pipelines.get_market_data import MarketDataPipeline
+from src.pipelines.get_fmp_data import FMPDataPipeline
 from src.core.design_system import MetricCardRenderer
 from src.core.wsb_quotes import WSBQuotes, QuoteCategory
 from src.pipelines.get_sentiment_scraper import SentimentScraper
 from src.analysis.interactive_dcf import InteractiveDCF
 from src.utils.helpers import format_large_number
 from src.analysis.pro_indicator_engine import ProIndicatorEngine
+from src.core.cache_manager import CacheManager
+
+
+@CacheManager.cache_analysis
+def _build_price_chart_figure(symbol: str, indicators_df: pd.DataFrame) -> go.Figure:
+    """Helper that actually builds a Plotly figure for the given symbol and indicators.
+
+    This function is cached to avoid expensive re-computation when Streamlit re-renders the
+    dashboard with the same input data repeatedly.
+    """
+    fig = make_subplots(
+        rows=5, cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.03,
+        subplot_titles=(f'{symbol} Price', 'Volume', 'RSI', 'Stochastic Oscillator', 'MACD'),
+        row_heights=[0.55, 0.1, 0.1, 0.1, 0.15]
+    )
+
+    x_vals = indicators_df.index
+    open_vals = indicators_df['open'].tolist()
+    high_vals = indicators_df['high'].tolist()
+    low_vals = indicators_df['low'].tolist()
+    close_vals = indicators_df['close'].tolist()
+    volume_vals = indicators_df['volume'].tolist()
+
+    # Build traces list and rows/cols for faster add_traces
+    traces = []
+    rows = []
+    cols = []
+
+    # Candlestick chart (Price)
+    traces.append(go.Candlestick(x=x_vals, open=open_vals, high=high_vals, low=low_vals, close=close_vals, name='Price'))
+    rows.append(1)
+    cols.append(1)
+
+    # Volume bars
+    colors = ['green' if c >= o else 'red' for o, c in zip(open_vals, close_vals)]
+    traces.append(go.Bar(x=x_vals, y=volume_vals, name='Volume', marker_color=colors, showlegend=False))
+    rows.append(2)
+    cols.append(1)
+
+    # RSI Indicator
+    rsi_col = next((col for col in indicators_df.columns if 'RSI' in col), None)
+    if rsi_col:
+        traces.append(go.Scatter(x=x_vals, y=indicators_df[rsi_col].tolist(), name='RSI', line=dict(color='cyan', width=1)))
+        rows.append(3)
+        cols.append(1)
+
+    # Stochastic Oscillator
+    stoch_k_col = next((col for col in indicators_df.columns if 'STOCHk' in col), None)
+    stoch_d_col = next((col for col in indicators_df.columns if 'STOCHd' in col), None)
+    if stoch_k_col and stoch_d_col:
+        traces.append(go.Scatter(x=x_vals, y=indicators_df[stoch_k_col].tolist(), name='%K', line=dict(color='orange', width=1)))
+        rows.append(4)
+        cols.append(1)
+        traces.append(go.Scatter(x=x_vals, y=indicators_df[stoch_d_col].tolist(), name='%D', line=dict(color='blue', width=1)))
+        rows.append(4)
+        cols.append(1)
+
+    # MACD Indicator
+    macd_col = next((col for col in indicators_df.columns if col.startswith('MACD_')), None)
+    macdh_col = next((col for col in indicators_df.columns if col.startswith('MACDh_')), None) # Histogram
+    macds_col = next((col for col in indicators_df.columns if col.startswith('MACDs_')), None) # Signal
+
+    if macd_col and macdh_col and macds_col:
+        # Histogram bars
+        macd_colors = ['red' if v < 0 else 'green' for v in indicators_df[macdh_col].tolist()]
+        traces.append(go.Bar(x=x_vals, y=indicators_df[macdh_col].tolist(), name='MACD Hist', marker_color=macd_colors))
+        rows.append(5)
+        cols.append(1)
+        # MACD Line
+        traces.append(go.Scatter(x=x_vals, y=indicators_df[macd_col].tolist(), name='MACD', line=dict(color='blue', width=1)))
+        rows.append(5)
+        cols.append(1)
+        # Signal Line
+        traces.append(go.Scatter(x=x_vals, y=indicators_df[macds_col].tolist(), name='Signal', line=dict(color='orange', width=1)))
+        rows.append(5)
+        cols.append(1)
+
+    # Add traces in bulk
+    fig.add_traces(traces, rows=rows, cols=cols)
+
+    # Build shapes list for horizontal lines (RSI, Stochastic) to avoid multiple add_hline calls
+    shapes = []
+    if rsi_col:
+        shapes.extend([
+            dict(type='line', xref='x', yref='y3', x0=x_vals[0], x1=x_vals[-1], y0=70, y1=70, line=dict(dash='dash', color='red', width=1)),
+            dict(type='line', xref='x', yref='y3', x0=x_vals[0], x1=x_vals[-1], y0=30, y1=30, line=dict(dash='dash', color='green', width=1)),
+        ])
+    if stoch_k_col and stoch_d_col:
+        shapes.extend([
+            dict(type='line', xref='x', yref='y4', x0=x_vals[0], x1=x_vals[-1], y0=80, y1=80, line=dict(dash='dash', color='red', width=1)),
+            dict(type='line', xref='x', yref='y4', x0=x_vals[0], x1=x_vals[-1], y0=20, y1=20, line=dict(dash='dash', color='green', width=1)),
+        ])
+
+    # Update layout
+    fig.update_layout(
+        title=f'{symbol} Price & Indicators',
+        yaxis_title='Price (USD)',
+        yaxis2_title='Volume',
+        yaxis3_title='RSI',
+        yaxis4_title='Stochastic',
+        yaxis5_title='MACD',
+        xaxis_rangeslider_visible=False,
+        height=900,
+        hovermode='x unified',
+        template='plotly_dark',
+        shapes=shapes
+    )
+
+    # Update axes
+    fig.update_xaxes(title_text='Date', row=5, col=1)
+    if rsi_col:
+        fig.update_yaxes(range=[0, 100], row=3, col=1)
+    if stoch_k_col:
+        fig.update_yaxes(range=[0, 100], row=4, col=1)
+
+    fig.update_layout(legend=dict(
+        orientation='h',
+        yanchor='bottom',
+        y=1.02,
+        xanchor='right',
+        x=1
+    ))
+    return fig
+from src.core.cache_manager import CacheManager
 
 
 class EquityDashboard:
@@ -27,6 +154,7 @@ class EquityDashboard:
         self.name = "Equity Analysis"
         self.interactive_dcf = InteractiveDCF()
         self.market_pipeline = MarketDataPipeline()
+        self.fmp_pipeline = FMPDataPipeline()
         self.sentiment_scraper = SentimentScraper()
         self.indicator_engine = ProIndicatorEngine()
 
@@ -43,15 +171,26 @@ class EquityDashboard:
             return
 
         # --- Data Fetching ---
+        # Fetch data using helper that prefers FMP for core fundamentals and Polygon (if available) for prices
         with st.spinner(f"Fetching data for {ticker}... {WSBQuotes.get_random_quote(QuoteCategory.GENERAL)}"):
-            company_info = self.market_pipeline.get_company_info(ticker)
-            key_metrics = self.market_pipeline.get_key_metrics(ticker)
-            price_data = self.market_pipeline.get_stock_price(ticker, period="1y")
-            sentiment_data = self.sentiment_scraper.get_sentiment_for_ticker(ticker)
+            company_info, company_info_error, key_metrics, key_metrics_error, price_data, price_data_error, sentiment_data, sentiment_error = self._fetch_data(ticker)
 
+        # If we can't get basic company info, we can't proceed.
         if company_info is None:
-            st.error(f"Could not retrieve data for ticker '{ticker}'. Please check the ticker and try again.")
+            st.error(f"Error fetching company info for {ticker}: {company_info_error}")
             return
+
+        # Use empty dicts as fallback if parts of the data are missing
+        key_metrics = key_metrics or {}
+        sentiment_data = sentiment_data or {}
+
+        # Display warnings for non-critical data failures
+        if key_metrics_error:
+            st.warning(f"Could not fetch key metrics: {key_metrics_error}")
+        if price_data_error:
+            st.warning(f"Could not fetch price data: {price_data_error}")
+        if sentiment_error:
+            st.warning(f"Could not fetch sentiment data: {sentiment_error}")
 
         # Calculate indicators
         if price_data is not None and not price_data.empty:
@@ -152,121 +291,103 @@ class EquityDashboard:
         self.interactive_dcf.display()
 
     def _create_price_chart(self, symbol: str, indicators_df: pd.DataFrame) -> go.Figure:
-        """Create an interactive price chart with volume and indicators."""
-        fig = make_subplots(
-            rows=5, cols=1,
-            shared_xaxes=True,
-            vertical_spacing=0.03,
-            subplot_titles=(f'{symbol} Price', 'Volume', 'RSI', 'Stochastic Oscillator', 'MACD'),
-            row_heights=[0.55, 0.1, 0.1, 0.1, 0.15]
-        )
+        """Create an interactive price chart with volume and indicators.
 
-        # Candlestick chart
-        fig.add_trace(
-            go.Candlestick(
-                x=indicators_df.index,
-                open=indicators_df['open'],
-                high=indicators_df['high'],
-                low=indicators_df['low'],
-                close=indicators_df['close'],
-                name='Price'
-            ),
-            row=1, col=1
-        )
-
-        # Volume bars
-        colors = np.where(indicators_df['close'] >= indicators_df['open'], 'green', 'red')
-        fig.add_trace(
-            go.Bar(
-                x=indicators_df.index,
-                y=indicators_df['volume'],
-                name='Volume',
-                marker_color=colors,
-                showlegend=False
-            ),
-            row=2, col=1
-        )
-
-        # RSI Indicator
-        rsi_col = next((col for col in indicators_df.columns if 'RSI' in col), None)
-        if rsi_col:
-            fig.add_trace(
-                go.Scatter(x=indicators_df.index, y=indicators_df[rsi_col], name='RSI', line=dict(color='cyan', width=1)),
-                row=3, col=1
-            )
-            fig.add_hline(y=70, line_dash="dash", line_color="red", line_width=1, row=3, col=1)
-            fig.add_hline(y=30, line_dash="dash", line_color="green", line_width=1, row=3, col=1)
-
-        # Stochastic Oscillator
-        stoch_k_col = next((col for col in indicators_df.columns if 'STOCHk' in col), None)
-        stoch_d_col = next((col for col in indicators_df.columns if 'STOCHd' in col), None)
-        if stoch_k_col and stoch_d_col:
-            fig.add_trace(
-                go.Scatter(x=indicators_df.index, y=indicators_df[stoch_k_col], name='%K', line=dict(color='orange', width=1)),
-                row=4, col=1
-            )
-            fig.add_trace(
-                go.Scatter(x=indicators_df.index, y=indicators_df[stoch_d_col], name='%D', line=dict(color='blue', width=1)),
-                row=4, col=1
-            )
-            fig.add_hline(y=80, line_dash="dash", line_color="red", line_width=1, row=4, col=1)
-            fig.add_hline(y=20, line_dash="dash", line_color="green", line_width=1, row=4, col=1)
-
-        # MACD Indicator
-        macd_col = next((col for col in indicators_df.columns if col.startswith('MACD_')), None)
-        macdh_col = next((col for col in indicators_df.columns if col.startswith('MACDh_')), None) # Histogram
-        macds_col = next((col for col in indicators_df.columns if col.startswith('MACDs_')), None) # Signal
-
-        if macd_col and macdh_col and macds_col:
-            # Histogram bars
-            macd_colors = np.where(indicators_df[macdh_col] < 0, 'red', 'green')
-            fig.add_trace(
-                go.Bar(x=indicators_df.index, y=indicators_df[macdh_col], name='MACD Hist', marker_color=macd_colors),
-                row=5, col=1
-            )
-            # MACD Line
-            fig.add_trace(
-                go.Scatter(x=indicators_df.index, y=indicators_df[macd_col], name='MACD', line=dict(color='blue', width=1)),
-                row=5, col=1
-            )
-            # Signal Line
-            fig.add_trace(
-                go.Scatter(x=indicators_df.index, y=indicators_df[macds_col], name='Signal', line=dict(color='orange', width=1)),
-                row=5, col=1
-            )
-
-        # Update layout
-        fig.update_layout(
-            title=f'{symbol} Price & Indicators',
-            yaxis_title='Price (USD)',
-            yaxis2_title='Volume',
-            yaxis3_title='RSI',
-            yaxis4_title='Stochastic',
-            yaxis5_title='MACD',
-            xaxis_rangeslider_visible=False,
-            height=900,
-            hovermode='x unified',
-            template='plotly_dark'
-        )
-
-        # Update axes
-        fig.update_xaxes(title_text="Date", row=5, col=1)
-        if rsi_col:
-            fig.update_yaxes(range=[0, 100], row=3, col=1)
-        if stoch_k_col:
-            fig.update_yaxes(range=[0, 100], row=4, col=1)
-
-        fig.update_layout(legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="right",
-            x=1
-        ))
-        return fig
+        This method delegates to a cached builder to avoid re-computation during
+        repetitive Streamlit re-renders.
+        """
+        return _build_price_chart_figure(symbol, indicators_df)
 
     def _render_ai_opinion(self, ticker):
         """Renders the AI opinion tab."""
         st.subheader("Co-pilot's Take")
         st.info("🤖 AI Opinion and analysis for this section are coming in Phase 5!")
         # Placeholder for future content
+
+    def _fetch_data(self, ticker: str):
+        """Fetch data for a ticker and return standardized tuples for the UI.
+
+        Returns: (company_info, company_info_error, key_metrics, key_metrics_error,
+                  price_data, price_data_error, sentiment_data, sentiment_error)
+        """
+        company_info = None
+        company_info_error = None
+        key_metrics = None
+        key_metrics_error = None
+        price_data = None
+        price_data_error = None
+        sentiment_data = None
+        sentiment_error = None
+
+        # Prefer FMP for company profile
+        try:
+            company_info = self.fmp_pipeline.get_company_profile(ticker)
+        except Exception as e:
+            company_info_error = str(e)
+
+        if not company_info:
+            try:
+                r = self.market_pipeline.get_company_info(ticker)
+                if isinstance(r, tuple):
+                    company_info, company_info_error = r
+                else:
+                    company_info = r
+                    company_info_error = None
+            except Exception as e:
+                company_info_error = company_info_error or str(e)
+
+        # Attempt FMP key metrics then fallback to yfinance-based extraction
+        try:
+            fmp_key_metrics = self.fmp_pipeline.get_key_metrics(ticker)
+            if fmp_key_metrics:
+                if isinstance(fmp_key_metrics, list):
+                    fmp_first = fmp_key_metrics[0] if len(fmp_key_metrics) > 0 else None
+                else:
+                    fmp_first = fmp_key_metrics
+                if fmp_first:
+                    key_metrics = {
+                        'pe_ratio': fmp_first.get('peRatioTTM') or fmp_first.get('peRatio') or None,
+                        'dividend_yield': fmp_first.get('dividendYield') or fmp_first.get('dividend_yield') or None,
+                        'market_cap': fmp_first.get('marketCap') or fmp_first.get('market_cap') or None,
+                    }
+        except Exception as e:
+            key_metrics_error = str(e)
+
+        if not key_metrics:
+            try:
+                r = self.market_pipeline.get_key_metrics(ticker)
+                if isinstance(r, tuple):
+                    key_metrics, key_metrics_error = r
+                else:
+                    key_metrics = r
+                    key_metrics_error = None
+            except Exception as e:
+                key_metrics_error = key_metrics_error or str(e)
+
+        # Price data: prefer Polygon (if enabled by MarketDataPipeline) then yfinance
+        try:
+            r = self.market_pipeline.get_stock_price(ticker, period="1y")
+            if isinstance(r, tuple):
+                price_data, price_data_error = r
+            else:
+                price_data = r
+                price_data_error = None
+        except Exception as e:
+            price_data_error = str(e)
+
+        # Sentiment
+        try:
+            sentiment_data, sentiment_error = self.sentiment_scraper.get_sentiment_for_ticker(ticker)
+        except Exception as e:
+            sentiment_error = str(e)
+
+        return (
+            company_info,
+            company_info_error,
+            key_metrics,
+            key_metrics_error,
+            price_data,
+            price_data_error,
+            sentiment_data,
+            sentiment_error,
+        )

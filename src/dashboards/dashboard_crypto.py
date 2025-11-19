@@ -573,8 +573,6 @@ class CryptoDashboard:
         Returns:
             str: Formatted HTML string
         """
-        import textwrap
-
         # Format numbers in the dataframe
         df_display = df.copy()
 
@@ -586,8 +584,22 @@ class CryptoDashboard:
         # Convert to HTML - use escape=False to render formatted values properly
         html = df_display.to_html(index=False, escape=False, classes='financial-table')
 
-        # Apply the same professional styling as financial statements
-        # Use centralized styles from the design system
-        styled_html = MetricCardRenderer.get_table_styles() + f'<div class="table-container">{html}</div>'
+        # Define CSS styles directly here to fix the AttributeError
+        # This styling matches professional financial tables.
+        table_styles = """
+        <style>
+            .table-container {
+                overflow-x: auto;
+            }
+            .financial-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-family: 'Consolas', 'Courier New', monospace;
+                font-size: 0.85rem;
+            }
+        </style>
+        """
+
+        styled_html = table_styles + f'<div class="table-container">{html}</div>'
 
         return styled_html

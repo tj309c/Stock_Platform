@@ -41,18 +41,20 @@ def find_pem_double_quoted_entries(text: str) -> dict:
         val = m.group('val')
         results[f'toplevel:{key}'] = {'key': key, 'match_text': m.group(0), 'pem': val, 'start': m.start(), 'end': m.end()}
 
-    # Nested [COINBASE] table keys like `secret = "-----BEGIN..."
-    # Capture simple cases inside the [COINBASE] block
-    coinbase_block_pattern = re.compile(r'\[COINBASE\](?P<body>.*?)(?=\n\[[A-Z0-9_\]]|\Z)', flags=re.S | re.I)
-    secret_entry_pattern = re.compile(r'(?P<key>secret|api_secret|COINBASE_API_SECRET|COINBASE_SECRET)\s*=\s*"(?P<val>-----BEGIN [^-]+ PRIVATE KEY-----.*?-----END [^-]+ PRIVATE KEY-----)"', flags=re.S | re.I)
-    for mb in coinbase_block_pattern.finditer(text):
+    # Nested [SECTION] table keys like `secret = "-----BEGIN..."
+    # Capture simple cases inside any [SECTION] block (e.g., [BINANCE], [COINBASE], etc.)
+    block_pattern = re.compile(r'\[(?P<block>[A-Z0-9_]+)\](?P<body>.*?)(?=\n\[[A-Z0-9_\]]|\Z)', flags=re.S | re.I)
+    # Accept common key names and both BINANCE and COINBASE legacy names in the match
+    secret_entry_pattern = re.compile(r'(?P<key>secret|api_secret|BINANCE_API_SECRET|BINANCE_SECRET|BINANCE_PRIVATE_KEY|COINBASE_API_SECRET|COINBASE_SECRET|COINBASE_PRIVATE_KEY|api_secret)\s*=\s*"(?P<val>-----BEGIN [^-]+ PRIVATE KEY-----.*?-----END [^-]+ PRIVATE KEY-----)"', flags=re.S | re.I)
+    for mb in block_pattern.finditer(text):
         body = mb.group('body')
+        block_name = mb.group('block')
         for s in secret_entry_pattern.finditer(body):
             key = s.group('key')
             val = s.group('val')
             full_match_start = mb.start() + s.start()
             full_match_end = mb.start() + s.end()
-            results[f'coinbase:{key}:{full_match_start}'] = {'key': key, 'match_text': s.group(0), 'pem': val, 'start': full_match_start, 'end': full_match_end}
+            results[f'block:{block_name}:{key}:{full_match_start}'] = {'block': block_name, 'key': key, 'match_text': s.group(0), 'pem': val, 'start': full_match_start, 'end': full_match_end}
 
     # Also detect JSON-like Cloud keys accidentally pasted into a double-quote
     json_pattern = re.compile(r'(?P<key>[A-Z0-9_]+)\s*=\s*"(?P<val>\{\s*\"name\"\s*:\s*\".*?\".*?\})"', flags=re.S)

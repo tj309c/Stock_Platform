@@ -1,4 +1,4 @@
-from src.pipelines.get_sentiment_scraper import SentimentScraper, DEFAULT_SOURCE_WEIGHTS
+from src.pipelines.get_sentiment_scraper import SentimentScraper, DEFAULT_SOURCE_WEIGHTS, SOCIAL_SOURCES, DEFAULT_SOCIAL_WEIGHT
 
 
 def test_weighting_influence(monkeypatch):
@@ -54,12 +54,30 @@ def test_load_and_save_weights_persistence(tmp_path, monkeypatch):
     for k in custom:
         assert abs(loaded[k] - custom[k]) < 1e-6
 
+    # Verify it works for new sources too
+    new_sources_custom = {
+        'GoogleNews': 0.5, 'Nasdaq': 0.2, 'Reddit': 0.1, 'StockTwits': 0.1, 'X': 0.1
+    }
+    assert s.set_weights(new_sources_custom)
+    s_new = SentimentScraper()
+    loaded_new = s_new.get_weights()
+    for k in new_sources_custom:
+        assert abs(loaded_new[k] - new_sources_custom[k]) < 1e-6
+
     # Reset to default
     assert s2.reset_weights_to_default()
     s3 = SentimentScraper()
     loaded2 = s3.get_weights()
     for k, v in DEFAULT_SOURCE_WEIGHTS.items():
         assert abs(loaded2[k] - v) < 1e-6
+
+
+def test_default_weight_sums_and_social_weight():
+    from src.pipelines.get_sentiment_scraper import DEFAULT_SOURCE_WEIGHTS, SOCIAL_SOURCES, DEFAULT_SOCIAL_WEIGHT
+    total = sum(DEFAULT_SOURCE_WEIGHTS.values())
+    assert abs(total - 1.0) < 1e-6
+    social_sum = sum(DEFAULT_SOURCE_WEIGHTS.get(s, 0.0) for s in SOCIAL_SOURCES)
+    assert abs(social_sum - DEFAULT_SOCIAL_WEIGHT) < 1e-6
 
 
 def test_set_weights_rejects_all_zero(tmp_path, monkeypatch):
@@ -113,7 +131,8 @@ def test_saving_weights_changes_reported_sentiment(tmp_path, monkeypatch):
 
     # Begin with defaults
     # Removed temporary debug printing
-    res1 = s.get_sentiment_for_ticker('AAPL')
+    res1, err1 = s.get_sentiment_for_ticker('AAPL')
+    assert err1 is None
     default_score = res1['score']
     # debug: should be default weights before setting custom weights
 
@@ -122,7 +141,8 @@ def test_saving_weights_changes_reported_sentiment(tmp_path, monkeypatch):
     assert s.set_weights(weights)
     # Clear cache to force recompute
     s.clear_cache()
-    res2 = s.get_sentiment_for_ticker('AAPL')
+    res2, err2 = s.get_sentiment_for_ticker('AAPL')
+    assert err2 is None
     assert abs(res2['score'] - res2['per_source']['Finviz']['score']) < 1e-6
     # Score should now be close to finviz score and might differ from default_score
     assert abs(res2['score'] - default_score) > 1e-6

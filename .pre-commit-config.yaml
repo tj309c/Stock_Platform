@@ -2,7 +2,7 @@ repos:
   - repo: local
     hooks:
       - id: check-secrets-format
-        name: Check secrets format (COINBASE keys)
+        name: Check secrets format (exchange keys)
         entry: python scripts/check_secrets_format.py
         language: system
         files: 

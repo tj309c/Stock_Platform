@@ -1,422 +1,187 @@
-"""
-Crypto Data Pipeline for Analysis Master
-Fetches cryptocurrency market data using ccxt (free exchange data).
-Provides OHLCV data, market info, and exchange data for major cryptocurrencies.
-"""
+"""Data pipeline for fetching cryptocurrency data using ccxt."""
 
-import ccxt
-import pandas as pd
-import numpy as np
-from typing import Optional, Dict, Any, List
-from ccxt.base.errors import AuthenticationError
-from datetime import datetime, timedelta
 import streamlit as st
-from src.core.cache_manager import CacheManager
-from src.core.config import AppConfig
+import pandas as pd
+import ccxt
 import logging
+from typing import Dict, Optional
+from src.core.config import get_secret
 
-logger = logging.getLogger(__name__)
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 
 
 class CryptoDataPipeline:
     """
-    Main pipeline for fetching cryptocurrency data using ccxt.
-    Supports multiple exchanges with Coinbase as the default.
+    A data pipeline for fetching cryptocurrency data from exchanges using ccxt.
+    Handles exchange initialization, data fetching, and basic data processing.
     """
 
-    def __init__(self, exchange_id: str = 'coinbase'):
+    def __init__(self, exchange_id: str = 'kraken'):
         """
-        Initialize the crypto data pipeline.
+        Initializes the data pipeline with a specific exchange.
 
         Args:
-            exchange_id: Exchange to use (default: 'coinbase')
+            exchange_id (str): The ID of the exchange to connect to (e.g., 'coinbase', 'binance').
         """
         self.exchange_id = exchange_id
-        self._exchange = None
+        self.logger = logging.getLogger(__name__)
+        self.exchange = self._get_exchange()
 
-    @property
-    def exchange(self):
-        """Lazy load the exchange connection."""
-        if self._exchange is None:
-            try:
-                exchange_class = getattr(ccxt, self.exchange_id)
-                cfg = AppConfig()
-                opts = {
-                    'enableRateLimit': True,
-                    'timeout': 30000,
-                }
-                # If we have coinbase credentials in AppConfig and the exchange is coinbase, set them
-                if self.exchange_id.lower() == 'coinbase':
-                    if cfg.coinbase_api_name:
-                        opts['apiKey'] = cfg.coinbase_api_name
-                    if cfg.coinbase_private_key:
-                        sec = cfg.coinbase_private_key
-                        if isinstance(sec, str) and ('BEGIN' in sec and 'PRIVATE KEY' in sec): # type: ignore
-                            logging.getLogger(__name__).warning(
-                                "Coinbase private key appears to be a PEM / Cloud key. Skipping adding it to CCXT opts."
-                            )
-                        else:
-                            opts['secret'] = cfg.coinbase_private_key
-                    if cfg.coinbase_api_password:
-                        opts['password'] = cfg.coinbase_api_password
-                self._exchange = exchange_class(opts)
-            except Exception as e:
-                st.error(f"Error connecting to {self.exchange_id}: {str(e)}")
-                # Fallback to coinbase
-                logging.getLogger(__name__).debug("Falling back to coinbase without credentials: %s", e)
-                self._exchange = ccxt.coinbase({'enableRateLimit': True})
-        return self._exchange
-
-    def _attempt_fallback_fetch(self, fallback_exchanges, func_name: str, *args, **kwargs):
+    @st.cache_data(ttl=300)  # Cache for 5 minutes
+    def get_ticker_info(_self, symbol: str) -> Optional[Dict]:
         """
-        Attempt a fetch operation (e.g., fetch_ohlcv) across fallback_exchanges. func_name is the method to call.
-        Returns result from the first successful fallback or None.
-        """
-        for ex_id in fallback_exchanges:
-            logging.getLogger(__name__).debug("Attempting fallback fetch on '%s' for function '%s'", ex_id, func_name)
-            try:
-                ex_class = getattr(ccxt, ex_id)
-                fallback_ex = ex_class({'enableRateLimit': True})
-                func = getattr(fallback_ex, func_name)
-                try:
-                    res = func(*args, **kwargs)
-                    logging.getLogger(__name__).info("Fallback to '%s' succeeded for '%s'", ex_id, func_name)
-                    return res
-                except Exception as e_fetch:
-                    logging.getLogger(__name__).debug("Fallback fetch from '%s' failed for function '%s': %s", ex_id, func_name, e_fetch)
-                    continue
-            except Exception as e_init:
-                logging.getLogger(__name__).debug("Failed to initialize fallback exchange '%s': %s", ex_id, e_init)
-                continue
-        return None
-
-    @CacheManager.cache_market_data
-    def get_crypto_price(
-        _self,
-        symbol: str,
-        timeframe: str = '1d',
-        limit: int = 365
-    ) -> Optional[pd.DataFrame]:
-        """
-        Fetch historical OHLCV data for a cryptocurrency.
+        Fetches the latest ticker information for a given symbol.
 
         Args:
-            symbol: Trading pair (e.g., 'BTC/USDT', 'ETH/USDT')
-            timeframe: Candlestick timeframe ('1m', '5m', '15m', '1h', '4h', '1d', '1w')
-            limit: Number of candles to fetch
+            symbol (str): The trading pair symbol (e.g., 'BTC/USD').
 
         Returns:
-            DataFrame with OHLCV data or None if error
+            dict: A dictionary containing ticker information, or None if an error occurs.
         """
-        logger.debug(f"get_crypto_price called for {symbol}, timeframe={timeframe}, limit={limit}")
-        try:
-            # Fetch OHLCV data
-            try:
-                logger.debug(f"Calling primary exchange '{_self.exchange_id}' to fetch OHLCV for {symbol}")
-                ohlcv = _self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
-            except (AuthenticationError, IndexError) as ae:
-                logger.warning(f"Primary exchange '{_self.exchange_id}' failed for {symbol}: {repr(ae)}. Attempting public fallbacks.")
-                # Fallback to public exchange if initial exchange requires auth or index error
-                fallback_exchanges = ['binance', 'kraken', 'coinbasepro']
-                symbol_variants = [symbol]
-                if '/USD' in symbol and 'USDT' not in symbol:
-                    symbol_variants.append(symbol.replace('/USD', '/USDT'))
-                ohlcv = None
-                for variant in symbol_variants:
-                    logger.debug(f"Attempting fallback fetch for symbol variant '{variant}'")
-                    # Correctly call the helper method on the `_self` instance
-                    res = CryptoDataPipeline._attempt_fallback_fetch(_self, fallback_exchanges, 'fetch_ohlcv', variant, timeframe, limit=limit)
-                    ohlcv = res
-                    if ohlcv:
-                        st.info(f"Using fallback exchange to fetch ohlcv for {variant}.")
-                        symbol = variant
-                        break
-
-            if not ohlcv:
-                st.warning(f"No data found for {symbol}")
-                return None
-
-            # Convert to DataFrame
-            df = pd.DataFrame(
-                ohlcv,
-                columns=['timestamp', 'Open', 'High', 'Low', 'Close', 'Volume']
-            )
-
-            # Convert timestamp to datetime
-            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-            df.set_index('timestamp', inplace=True)
-
-            return df
-
-        except Exception as e:
-            st.error(f"Error fetching price data for {symbol}: {str(e)}")
+        if not _self.exchange:
             return None
-
-    @CacheManager.cache_market_data
-    def get_current_price(_self, symbol: str) -> Optional[float]:
-        """
-        Get the current price for a cryptocurrency.
-
-        Args:
-            symbol: Trading pair (e.g., 'BTC/USDT')
-
-        Returns:
-            Current price as float or None
-        """
         try:
             ticker = _self.exchange.fetch_ticker(symbol)
-            return ticker.get('last')
-
-        except Exception as e:
-            st.error(f"Error fetching current price for {symbol}: {str(e)}")
+            return ticker
+        except (ccxt.NetworkError, ccxt.ExchangeError, ccxt.BadSymbol) as e:
+            _self.logger.error(f"Failed to fetch ticker for {symbol}: {e}")
             return None
 
-    @CacheManager.cache_market_data
-    def get_ticker_info(_self, symbol: str) -> Optional[Dict[str, Any]]:
+    @st.cache_data(ttl=300)  # Cache for 5 minutes
+    def get_crypto_price(_self, symbol: str, timeframe: str = '1d', limit: int = 365) -> Optional[pd.DataFrame]:
         """
-        Get detailed ticker information for a cryptocurrency.
+        Fetches historical OHLCV data for a crypto symbol.
 
         Args:
-            symbol: Trading pair (e.g., 'BTC/USDT')
+            symbol (str): The trading pair symbol (e.g., 'BTC/USD').
+            timeframe (str): The timeframe for the data (e.g., '1h', '1d').
+            limit (int): The number of data points to fetch.
 
         Returns:
-            Dictionary with ticker info or None
+            pd.DataFrame: A DataFrame with OHLCV data, or None if an error occurs.
         """
+        if not _self.exchange or (not getattr(_self.exchange, 'has', {}).get('fetchOHLCV') and not hasattr(_self.exchange, 'fetch_ohlcv')):
+            _self.logger.warning(f"{_self.exchange_id} does not support fetching OHLCV data.")
+            return None
         try:
-            try:
-                ticker = _self.exchange.fetch_ticker(symbol)
-            except (AuthenticationError, IndexError) as ae:
-                # Authentication errors from ccxt can indicate that the exchange requires API credentials
-                msg = str(ae)
-                st.error(f"Authentication error fetching ticker for {symbol}: {msg}")
-                st.info("If you are using Coinbase (or another exchange with authentication-required endpoints), add COINBASE_API_KEY/COINBASE_API_SECRET to `.streamlit/secrets.toml` or set the keys in the environment.")
-                # Attempt to fallback to public exchange to fetch ticker. Try common public exchanges and symbol variants.
-                fallback_exchanges = ['binance', 'kraken', 'coinbasepro']
-                symbol_variants = [symbol]
-                if '/USD' in symbol and 'USDT' not in symbol:
-                    symbol_variants.append(symbol.replace('/USD', '/USDT'))
-                for variant in symbol_variants:
-                    ticker = CryptoDataPipeline._attempt_fallback_fetch(_self, fallback_exchanges, 'fetch_ticker', variant)
-                    if ticker:
-                        st.info(f"Using fallback exchange to fetch ticker for {variant}.")
-                        return {
-                            'symbol': ticker.get('symbol'),
-                            'last': ticker.get('last'),
-                            'bid': ticker.get('bid'),
-                            'ask': ticker.get('ask'),
-                            'high': ticker.get('high'),
-                            'low': ticker.get('low'),
-                            'volume': ticker.get('quoteVolume'),
-                            'base_volume': ticker.get('baseVolume'),
-                            'change': ticker.get('change'),
-                            'percentage': ticker.get('percentage'),
-                            'timestamp': ticker.get('timestamp'),
-                            'datetime': ticker.get('datetime'),
-                        }
-                return None
-
-            return {
-                'symbol': ticker.get('symbol'),
-                'last': ticker.get('last'),
-                'bid': ticker.get('bid'),
-                'ask': ticker.get('ask'),
-                'high': ticker.get('high'),
-                'low': ticker.get('low'),
-                'volume': ticker.get('quoteVolume'),  # Volume in quote currency
-                'base_volume': ticker.get('baseVolume'),  # Volume in base currency
-                'change': ticker.get('change'),
-                'percentage': ticker.get('percentage'),
-                'timestamp': ticker.get('timestamp'),
-                'datetime': ticker.get('datetime'),
-            }
-
-        except Exception as e:
-            # Enhance error message for coinbase auth specifically
-            text = str(e)
-            if 'apiKey' in text or 'API Key' in text or 'requires "apiKey"' in text:
-                st.error(f"Coinbase requires API credentials to access this data. Please add COINBASE_API_KEY/COINBASE_API_SECRET to `.streamlit/secrets.toml` or set the keys as environment variables.")
-            else:
-                st.error(f"Error fetching ticker info for {symbol}: {text}")
+            ohlcv = _self.exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
+            df = pd.DataFrame(ohlcv, columns=['timestamp', 'Open', 'High', 'Low', 'Close', 'Volume'])
+            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+            df.set_index('timestamp', inplace=True)
+            return df
+        except IndexError as e:
+            # Some exchanges may raise IndexError from within CCXT when parsing keys or the payload
+            _self.logger.warning(f"IndexError fetching OHLCV on {getattr(_self.exchange, 'id', _self.exchange_id)}: {e} - trying fallback exchanges")
+            # Try fallback exchanges (public CCXT endpoints) — prefer Kraken and other lightweight public exchanges.
+            fallback_exchanges = ['kraken', 'bitstamp', 'bitfinex']
+            for fex in fallback_exchanges:
+                # Skip trying the same exchange as we already attempted above
+                if fex == _self.exchange_id:
+                    continue
+                try:
+                    fallback_cls = getattr(ccxt, fex)
+                    fallback_exchange = fallback_cls()
+                    ohlcv = fallback_exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
+                    df = pd.DataFrame(ohlcv, columns=['timestamp', 'Open', 'High', 'Low', 'Close', 'Volume'])
+                    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+                    df.set_index('timestamp', inplace=True)
+                    return df
+                except Exception:
+                    # Ignore errors and try next fallback
+                    continue
+            return None
+        except (ccxt.NetworkError, ccxt.ExchangeError, ccxt.BadSymbol) as e:
+            _self.logger.error(f"Failed to fetch OHLCV data for {symbol}: {e}")
             return None
 
-    @CacheManager.cache_market_data
-    def get_orderbook(_self, symbol: str, limit: int = 20) -> Optional[Dict[str, Any]]:
+    @st.cache_data(ttl=300)  # Cache for 5 minutes
+    def get_market_info(_self, symbol: str) -> Optional[Dict]:
         """
-        Get orderbook data for a cryptocurrency.
+        Fetches market information for a given symbol.
 
         Args:
-            symbol: Trading pair (e.g., 'BTC/USDT')
-            limit: Number of levels to fetch
+            symbol (str): The trading pair symbol.
 
         Returns:
-            Dictionary with bids and asks or None
+            dict: Market information, or None if an error occurs.
         """
+        if not _self.exchange:
+            return None
+        try:
+            _self.exchange.load_markets()
+            market = _self.exchange.market(symbol)
+            return market
+        except (ccxt.NetworkError, ccxt.ExchangeError, ccxt.BadSymbol) as e:
+            _self.logger.error(f"Failed to fetch market info for {symbol}: {e}")
+            return None
+
+    @st.cache_data(ttl=60)  # Cache for 1 minute (more frequent updates)
+    def get_orderbook(_self, symbol: str, limit: int = 20) -> Optional[Dict]:
+        """
+        Fetches the order book for a given symbol.
+
+        Args:
+            symbol (str): The trading pair symbol.
+            limit (int): The number of bids and asks to retrieve.
+
+        Returns:
+            dict: A dictionary with 'bids' and 'asks', or None if an error occurs.
+        """
+        if not _self.exchange or (not getattr(_self.exchange, 'has', {}).get('fetchOrderBook') and not hasattr(_self.exchange, 'fetch_order_book')):
+            _self.logger.warning(f"{_self.exchange_id} does not support fetching order books.")
+            return None
         try:
             orderbook = _self.exchange.fetch_order_book(symbol, limit=limit)
-
-            return {
-                'bids': orderbook.get('bids', []),
-                'asks': orderbook.get('asks', []),
-                'timestamp': orderbook.get('timestamp'),
-                'datetime': orderbook.get('datetime'),
-            }
-
-        except Exception as e:
-            st.error(f"Error fetching orderbook for {symbol}: {str(e)}")
+            return orderbook
+        except (ccxt.NetworkError, ccxt.ExchangeError, ccxt.BadSymbol) as e:
+            _self.logger.error(f"Failed to fetch order book for {symbol}: {e}")
             return None
-
-    @CacheManager.cache_market_data
-    def get_market_info(_self, symbol: str) -> Optional[Dict[str, Any]]:
-        """
-        Get market information and trading limits for a cryptocurrency.
-
-        Args:
-            symbol: Trading pair (e.g., 'BTC/USDT')
-
-        Returns:
-            Dictionary with market info or None
-        """
-        try:
-            markets = _self.exchange.load_markets()
-            market = markets.get(symbol)
-
-            if not market:
-                return None
-
-            return {
-                'id': market.get('id'),
-                'symbol': market.get('symbol'),
-                'base': market.get('base'),
-                'quote': market.get('quote'),
-                'active': market.get('active'),
-                'maker_fee': market.get('maker'),
-                'taker_fee': market.get('taker'),
-                'limits': market.get('limits'),
-                'precision': market.get('precision'),
-            }
-
-        except Exception as e:
-            st.error(f"Error fetching market info for {symbol}: {str(e)}")
-            return None
-
-    @CacheManager.cache_market_data
-    def get_multiple_tickers(
-        _self,
-        symbols: List[str]
-    ) -> Dict[str, Dict[str, Any]]:
-        """
-        Fetch ticker data for multiple cryptocurrencies at once.
-
-        Args:
-            symbols: List of trading pairs
-
-        Returns:
-            Dictionary mapping symbols to their ticker data
-        """
-        results = {}
-
-        for symbol in symbols:
-            ticker = _self.get_ticker_info(symbol)
-            if ticker is not None:
-                results[symbol] = ticker
-
-        return results
 
     def calculate_returns(self, price_data: pd.DataFrame) -> pd.DataFrame:
+        """Calculates daily and cumulative returns."""
+        returns_df = price_data.copy()
+        returns_df['Daily_Return'] = returns_df['Close'].pct_change()
+        returns_df['Cumulative_Return'] = (1 + returns_df['Daily_Return']).cumprod() - 1
+        return returns_df
+
+    def calculate_volatility(self, price_data: pd.DataFrame, window: int = 30) -> pd.DataFrame:
+        """Calculates rolling volatility."""
+        volatility_df = price_data.copy()
+        returns = volatility_df['Close'].pct_change()
+        # Annualize for crypto (365 days)
+        volatility_df['Volatility'] = returns.rolling(window=window).std() * (365 ** 0.5)
+        return volatility_df
+
+    def _get_exchange(self) -> Optional[ccxt.Exchange]:
         """
-        Calculate various return metrics from price data.
-
-        Args:
-            price_data: DataFrame with OHLCV data
-
-        Returns:
-            DataFrame with added return columns
-        """
-        df = price_data.copy()
-
-        # Daily returns
-        df['Daily_Return'] = df['Close'].pct_change()
-
-        # Cumulative returns
-        df['Cumulative_Return'] = (1 + df['Daily_Return']).cumprod() - 1
-
-        # Log returns
-        df['Log_Return'] = np.log(df['Close'] / df['Close'].shift(1))
-
-        return df
-
-    def calculate_volatility(
-        self,
-        price_data: pd.DataFrame,
-        window: int = 30
-    ) -> pd.DataFrame:
-        """
-        Calculate rolling volatility metrics.
-
-        Args:
-            price_data: DataFrame with OHLCV data
-            window: Rolling window size
-
-        Returns:
-            DataFrame with volatility metrics
-        """
-        df = self.calculate_returns(price_data)
-
-        # Annualized volatility (365 days for crypto, 24/7 market)
-        df['Volatility'] = df['Daily_Return'].rolling(window=window).std() * np.sqrt(365)
-
-        return df
-
-    @staticmethod
-    def get_available_exchanges() -> List[str]:
-        """
-        Get list of available exchanges from ccxt.
-
-        Returns:
-            List of exchange IDs
-        """
-        return ccxt.exchanges
-
-    @staticmethod
-    def validate_symbol(symbol: str, exchange_id: str = 'coinbase') -> bool:
-        """
-        Validate if a trading pair exists on an exchange.
-
-        Args:
-            symbol: Trading pair (e.g., 'BTC/USD')
-            exchange_id: Exchange to check
-
-        Returns:
-            bool: True if valid, False otherwise
+        Initializes and returns an exchange instance with API keys if available.
         """
         try:
-            exchange_class = getattr(ccxt, exchange_id)
-            exchange = exchange_class({'enableRateLimit': True})
-            markets = exchange.load_markets()
-            return symbol in markets
-        except:
-            return False
+            exchange_class = getattr(ccxt, self.exchange_id)
+            
+            # Generic mapping for exchange API keys and secrets (Binance, etc.) - prefer explicit exchange-specific secrets
+            api_key = get_secret(f"{self.exchange_id.upper()}_API_KEY") or get_secret("EXCHANGE_API_KEY")
+            secret = get_secret(f"{self.exchange_id.upper()}_API_SECRET") or get_secret("EXCHANGE_API_SECRET")
 
-
-# Convenience functions for quick access
-def get_crypto_price(symbol: str, timeframe: str = '1d', limit: int = 365) -> Optional[pd.DataFrame]:
-    """Quick function to get crypto price data."""
-    pipeline = CryptoDataPipeline()
-    return pipeline.get_crypto_price(symbol, timeframe, limit)
-
-
-def get_current_price(symbol: str) -> Optional[float]:
-    """Quick function to get current crypto price."""
-    pipeline = CryptoDataPipeline()
-    return pipeline.get_current_price(symbol)
-
-
-def get_ticker_info(symbol: str) -> Optional[Dict[str, Any]]:
-    """Quick function to get ticker info."""
-    pipeline = CryptoDataPipeline()
-    return pipeline.get_ticker_info(symbol)
-
-
-def validate_symbol(symbol: str) -> bool:
-    """Quick function to validate a symbol."""
-    return CryptoDataPipeline.validate_symbol(symbol)
+            # Do not pass PEM-formatted private keys as 'secret' to CCXT - CCXT expects API secret strings for classic keys
+            if api_key and secret:
+                # Detect PEM-like secret values (BEGIN ... PRIVATE KEY) and skip including them in opts
+                if isinstance(secret, str) and ('BEGIN' in secret and 'PRIVATE KEY' in secret):
+                    self.logger.warning("Detected PEM private key in secrets; not passing 'secret' to CCXT opts.")
+                    return exchange_class({ 'apiKey': api_key })
+                # Normal key/secret pair
+                self.logger.info(f"Initializing {self.exchange_id} with API credentials.")
+                return exchange_class({
+                    'apiKey': api_key,
+                    'secret': secret,
+                })
+            else:
+                self.logger.warning(f"API credentials not found for {self.exchange_id}. Initializing in public mode.")
+                return exchange_class()
+        except AttributeError:
+            self.logger.error(f"Exchange '{self.exchange_id}' not found in ccxt.")
+            return None
+        except Exception as e:
+            self.logger.error(f"Failed to initialize exchange {self.exchange_id}: {e}")
+            return None

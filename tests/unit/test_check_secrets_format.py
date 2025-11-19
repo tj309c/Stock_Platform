@@ -13,7 +13,7 @@ def run_check_with_file(secrets_file: Path) -> tuple[int, str]:
 
 def test_check_secrets_format_detects_paste_error(tmp_path):
     secrets_file = tmp_path / "secrets.toml"
-    content = 'COINBASE_API_KEY = "TESTKEY"\nCOINBASE_API_SECRET = "TESTKEY"\n'
+    content = 'KRAKEN_API_KEY = "TESTKEY"\nKRAKEN_API_SECRET = "TESTKEY"\n'
     secrets_file.write_text(content, encoding='utf-8')
     rc, out = run_check_with_file(secrets_file)
     assert rc != 0
@@ -23,7 +23,7 @@ def test_check_secrets_format_detects_paste_error(tmp_path):
 def test_check_secrets_format_detects_pem(tmp_path):
     secrets_file = tmp_path / "secrets.toml"
     pem = '-----BEGIN EC PRIVATE KEY-----\\nMIITEST\\n-----END EC PRIVATE KEY-----'
-    content = f'COINBASE_API_KEY = "TESTKEY"\nCOINBASE_API_SECRET = "{pem}"\n'
+    content = f'KRAKEN_API_KEY = "TESTKEY"\nKRAKEN_API_SECRET = "{pem}"\n'
     secrets_file.write_text(content, encoding='utf-8')
     rc, out = run_check_with_file(secrets_file)
     assert rc != 0

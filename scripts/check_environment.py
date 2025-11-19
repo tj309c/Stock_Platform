@@ -97,10 +97,12 @@ def check_fmp_key() -> bool:
     return False
 
 
-def check_coinbase_key() -> bool:
-    env_key = os.getenv("COINBASE_API_NAME") or os.getenv("COINBASE_API_KEY")
+def check_kraken_key() -> bool:
+    """Check for KRAKEN API keys in environment or .streamlit secrets.
+    Accept BINANCE/COINBASE env names as legacy aliases for convenience."""
+    env_key = os.getenv("KRAKEN_API_KEY") or os.getenv("KRAKEN_API_NAME") or os.getenv("BINANCE_API_NAME") or os.getenv("BINANCE_API_KEY") or os.getenv("COINBASE_API_NAME") or os.getenv("COINBASE_API_KEY")
     if env_key:
-        print("COINBASE API key found in environment variables (COINBASE_API_NAME/COINBASE_API_KEY).")
+        print("Exchange API key found in environment variables (KRAKEN_API_KEY/KRAKEN_API_NAME or legacy BINANCE/COINBASE names).")
         return True
     if SECRETS_TOML.exists():
         try:
@@ -130,22 +132,22 @@ def check_coinbase_key() -> bool:
                 parsed['COINBASE_API_SECRET'] = m_secret.group(1).strip()
 
         # Regardless of whether parsing succeeded, check the parsed dict for keys
-        if parsed.get("COINBASE_API_NAME") or parsed.get("COINBASE_API_KEY"):
-            print("COINBASE API key found in .streamlit/secrets.toml (COINBASE_API_NAME/COINBASE_API_KEY)")
-            ck = parsed.get("COINBASE_API_KEY")
+        if parsed.get("KRAKEN_API_NAME") or parsed.get("KRAKEN_API_KEY") or parsed.get("BINANCE_API_NAME") or parsed.get("BINANCE_API_KEY") or parsed.get("COINBASE_API_NAME") or parsed.get("COINBASE_API_KEY"):
+            print("Exchange API key found in .streamlit/secrets.toml (KRAKEN_API_NAME/KRAKEN_API_KEY or legacy BINANCE/COINBASE names)")
+            ck = parsed.get("KRAKEN_API_KEY") or parsed.get("KRAKEN_API_NAME") or parsed.get("BINANCE_API_KEY") or parsed.get("BINANCE_API_NAME") or parsed.get("COINBASE_API_KEY")
             if isinstance(ck, str) and ck.startswith("organizations/"):
-                print("  -> NOTE: This looks like a Coinbase Cloud organization API key (starts with 'organizations/').")
-                print("     CCXT may not support Coinbase Cloud keys. Consider creating a classic API key pair for CCXT or using Coinbase Cloud SDK.")
-            cs = parsed.get("COINBASE_PRIVATE_KEY") or parsed.get("COINBASE_API_SECRET")
+                print("  -> NOTE: This looks like an organization-style API key (starts with 'organizations/').")
+                print("     CCXT may not support organization-style keys. Consider creating a classic API key pair for CCXT or using the vendor SDK.")
+            cs = parsed.get("KRAKEN_PRIVATE_KEY") or parsed.get("KRAKEN_API_SECRET") or parsed.get("BINANCE_PRIVATE_KEY") or parsed.get("BINANCE_API_SECRET") or parsed.get("COINBASE_PRIVATE_KEY") or parsed.get("COINBASE_API_SECRET")
             if isinstance(cs, str) and "BEGIN" in cs and "PRIVATE KEY" in cs:
-                print("  -> NOTE: COINBASE_API_SECRET looks like a PEM private key (BEGIN ... PRIVATE KEY). CCXT typically expects a simple API secret string, not a PEM file.")
+                print("  -> NOTE: The private key looks like a PEM (BEGIN ... PRIVATE KEY). CCXT typically expects a simple API secret string for classic keys.")
             return True
     print("COINBASE_API_KEY not configured. Public data may still work, but authenticated endpoints require a key.")
     return False
 
 
-def check_repo_root_coinbase() -> bool:
-    """Check repo root secrets.toml for COINBASE API key fallback."""
+def check_repo_root_kraken() -> bool:
+    """Check repo root secrets.toml for KRAKEN (or BINANCE/COINBASE legacy) API key fallback."""
     repo_root = ROOT / 'secrets.toml'
     if not repo_root.exists():
         return False
@@ -159,12 +161,12 @@ def check_repo_root_coinbase() -> bool:
             except Exception:
                 toml = None
         parsed = toml.loads(text) if toml else {}
-        if parsed.get('COINBASE_API_KEY'):
-            print('COINBASE_API_KEY found in repo-root secrets.toml (dev fallback)')
-            ck = parsed.get('COINBASE_API_KEY')
+        if parsed.get('KRAKEN_API_KEY') or parsed.get('BINANCE_API_KEY') or parsed.get('COINBASE_API_KEY'):
+            print('Exchange API key found in repo-root secrets.toml (dev fallback)')
+            ck = parsed.get('KRAKEN_API_KEY') or parsed.get('BINANCE_API_KEY') or parsed.get('COINBASE_API_KEY')
             if isinstance(ck, str) and ck.startswith('organizations/'):
-                print("  -> NOTE: This looks like a Coinbase Cloud organization API key (starts with 'organizations/').")
-                print("     CCXT may not support Coinbase Cloud keys. Consider creating a classic API key pair for CCXT or using Coinbase Cloud SDK.")
+                print("  -> NOTE: This looks like an organization-style API key (starts with 'organizations/').")
+                print("     CCXT may not support organization-style keys. Consider creating a classic API key pair for CCXT or using vendor SDK.")
             return True
     except Exception:
         return False
@@ -180,13 +182,13 @@ def check_repo_root_secrets() -> bool:
     return False
 
 
-def show_next_steps(python_ok: bool, venv_ok: bool, pkgs_ok: bool, key_ok: bool, coinbase_ok: bool) -> None:
+def show_next_steps(python_ok: bool, venv_ok: bool, pkgs_ok: bool, key_ok: bool, exchange_ok: bool) -> None:
     print("\nChecklist Results Summary:")
     print(f"  Python OK: {python_ok}")
     print(f"  venv active: {venv_ok}")
     print(f"  packages OK: {pkgs_ok}")
     print(f"  fmp key present: {key_ok}")
-    print(f"  coinbase key present: {coinbase_ok}")
+    print(f"  exchange key present: {exchange_ok}")
 
     if not python_ok:
         print("\nAction: Install or select Python 3.12+, e.g.:\n  py -3.12 -m venv .venv")
@@ -203,10 +205,9 @@ def show_next_steps(python_ok: bool, venv_ok: bool, pkgs_ok: bool, key_ok: bool,
     if not check_repo_root_secrets():
         print('\nIf you have a secrets.toml at the repo root (e.g., for local dev), consider moving the file into `.streamlit/secrets.toml` so Streamlit can load it automatically, or export keys via environment variables.')
     # Coinbase deprecation & key format guidance
-    if coinbase_ok:
-        print('\nCoinbase note:')
-        print('  - Coinbase Pro (API) has been deprecated and may return 503s via ccxt (coinbasepro).')
-        print('  - If you rely on authenticated Coinbase CCXT features: create a classic API key (apiKey, secret and passphrase) via the Coinbase settings page, or use Coinbase Cloud SDK for organization keys.')
+    if exchange_ok:
+        print('\nExchange note:')
+        print('  - We recommend using Kraken as the default exchange for CCXT access in this project. If you have org-style keys, CCXT may not support them; consider creating a classic API key or using the vendor SDK for organization-style keys.')
 
 
 if __name__ == '__main__':
@@ -215,5 +216,5 @@ if __name__ == '__main__':
     venv_ok = check_venv_active()
     pkgs_ok = check_packages()
     key_ok = check_fmp_key()
-    coinbase_ok = check_coinbase_key() or check_repo_root_coinbase()
-    show_next_steps(python_ok, venv_ok, pkgs_ok, key_ok, coinbase_ok)
+    exchange_ok = check_kraken_key() or check_repo_root_kraken()
+    show_next_steps(python_ok, venv_ok, pkgs_ok, key_ok, exchange_ok)

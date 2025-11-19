@@ -18,14 +18,54 @@ from bs4 import BeautifulSoup
 from src.core.cache_manager import CacheManager
 from src.core.settings_store import get_scope_config, set_scope_config, get_scope_weights, set_scope_weights, reset_scope_weights
 from src.pipelines import llm_scoring
+from src.core.config import get_secret
 from src.pipelines.get_sec_rss_feeds import get_edgar_feed_for_ticker, get_cik_for_ticker
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_SOURCE_WEIGHTS = {'Finviz': 0.4, 'Yahoo': 0.4, 'SEC': 0.2}
-DEFAULT_ENABLED_SOURCES = {'Finviz': True, 'Yahoo': True, 'SEC': True}
-DEFAULT_RATE_LIMITS = {'Finviz': 0.1, 'Yahoo': 0.1, 'SEC': 0.1}
+"""
+Default weights and settings for sources. To support adding new social media providers
+without changing the distribution semantics, social sources are defined in SOCIAL_SOURCES
+and share a fixed combined weight (DEFAULT_SOCIAL_WEIGHT).
+"""
 
+# Social sources are an easy place to add new providers later; keep the combined social
+# weight stable and redistribute it equally across active social sources.
+SOCIAL_SOURCES = ['Reddit', 'StockTwits', 'X']
+DEFAULT_SOCIAL_WEIGHT = 0.2
+
+# Primary news sources and their base relative weights (these will be scaled to sum to
+# (1.0 - DEFAULT_SOCIAL_WEIGHT) to preserve the overall weighting semantics)
+PRIMARY_NEWS_BASE = {
+    'Finviz': 0.2,
+    'Yahoo': 0.2,
+    'GoogleNews': 0.2,
+    'Nasdaq': 0.1,
+    'SEC': 0.1,
+}
+
+def _make_default_weights() -> dict:
+    social_count = len(SOCIAL_SOURCES)
+    social_each = DEFAULT_SOCIAL_WEIGHT / social_count if social_count else 0.0
+    base_news_sum = sum(PRIMARY_NEWS_BASE.values())
+    # Scale the news weights so news_sum == (1 - DEFAULT_SOCIAL_WEIGHT)
+    scale = (1.0 - DEFAULT_SOCIAL_WEIGHT) / base_news_sum if base_news_sum else 0.0
+    out = {k: v * scale for k, v in PRIMARY_NEWS_BASE.items()}
+    for s in SOCIAL_SOURCES:
+        out[s] = social_each
+    return out
+
+DEFAULT_SOURCE_WEIGHTS = _make_default_weights()
+
+# Enabled sources default
+DEFAULT_ENABLED_SOURCES = {k: True for k in list(PRIMARY_NEWS_BASE.keys())}
+DEFAULT_ENABLED_SOURCES.update({s: False for s in SOCIAL_SOURCES})
+
+# Default rate limits (social sources tend to be rate-limited more agressively)
+DEFAULT_RATE_LIMITS = {k: 0.1 for k in list(PRIMARY_NEWS_BASE.keys())}
+DEFAULT_RATE_LIMITS.update({s: 0.5 for s in SOCIAL_SOURCES})
+
+# region: Optional Dependency Checks
 try:
     from nltk.sentiment.vader import SentimentIntensityAnalyzer
     import nltk
@@ -52,6 +92,19 @@ try:
 except ImportError:
     HAS_TEXTBLOB = False
 
+try:
+    import feedparser
+    HAS_FEEDPARSER = True
+except ImportError:
+    HAS_FEEDPARSER = False
+
+try:
+    import tweepy
+    HAS_TWEEPY = True
+except ImportError:
+    HAS_TWEEPY = False
+
+# endregion
 class SentimentScraper:
     """
     Scrapes financial news sources for headlines and performs sentiment analysis.
@@ -59,8 +112,10 @@ class SentimentScraper:
     def __init__(self, scope: str = 'global'):
         self.scope = scope
         self.analyzer = SentimentIntensityAnalyzer() if HAS_VADER else None
+        # SEC EDGAR requires a custom User-Agent of the format: Sample Company Name AdminContact@<sample company domain>.com
+        # See: https://www.sec.gov/os/developer-support-policy
         self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'StockPlatform/1.0 (Python Scraper; trevor@stockplatform.dev)'
         }
         self.session = requests.Session()
         self._last_request = {}
@@ -81,14 +136,22 @@ class SentimentScraper:
         # Basic validation ensures numeric values and non-negative
         valid = {}
         for k in DEFAULT_SOURCE_WEIGHTS.keys():
-            val = weights.get(k, DEFAULT_SOURCE_WEIGHTS[k])
+            # When users call set_weights, treat unspecified keys as 0.0 so explicit
+            # partial updates behave as expected in tests and UI flows.
+            val = weights.get(k, 0.0)
             try:
                 fv = float(val)
             except Exception:
                 fv = DEFAULT_SOURCE_WEIGHTS[k]
             valid[k] = fv
-        # If all values are zero, reject and don't persist
-        if sum(valid.values()) == 0:
+        # If the provided values are all zero, reject and don't persist (the user explicitly set zeros)
+        provided_vals = []
+        for k, v in weights.items():
+            try:
+                provided_vals.append(float(v))
+            except Exception:
+                pass
+        if provided_vals and sum(provided_vals) == 0:
             return False
         ok = set_scope_weights(scope or self.scope, valid)
         # Update the instance copy so instance reflects latest state
@@ -187,6 +250,183 @@ class SentimentScraper:
             cik = None
         return get_edgar_feed_for_ticker(cik or ticker, session=self.session)
 
+    def _get_headlines_from_reddit(self, ticker: str) -> List[Dict]:
+        """Fetches headlines from Reddit RSS feeds using feedparser."""
+        self._throttle('Reddit')
+        if not HAS_FEEDPARSER:
+            logger.warning("`feedparser` library not found. Reddit scraping is disabled. Please run 'pip install feedparser'.")
+            return []
+        headlines = []
+        subreddits_to_search = ['stocks', 'investing', 'wallstreetbets']
+        search_query = quote_plus(f'title:"{ticker}" OR selftext:"{ticker}"')
+
+        try: # Reddit
+            for sub_name in subreddits_to_search:
+                # Using search RSS feed for better relevance. Sorting by new.
+                rss_url = f"https://www.reddit.com/r/{sub_name}/search.rss?q={search_query}&sort=new&restrict_sr=on&limit=25"
+                
+                # feedparser handles the request internally
+                feed = feedparser.parse(rss_url, agent=self.headers['User-Agent'])
+
+                for entry in feed.entries:
+                    published_time = datetime.now() # Fallback
+                    if hasattr(entry, 'published_parsed') and entry.published_parsed:
+                        published_time = datetime.fromtimestamp(time.mktime(entry.published_parsed))
+                    
+                    # Filter out entries older than 7 days to keep it relevant
+                    if (datetime.now() - published_time) < timedelta(days=7):
+                        headlines.append({
+                            'source': 'Reddit',
+                            'title': entry.title,
+                            'url': entry.link,
+                            'published': published_time.isoformat()
+                        })
+        except Exception as e:
+            logger.warning(f"Failed to fetch or parse Reddit RSS feed for {ticker}: {e}")
+
+        return headlines
+
+    def _get_headlines_from_stocktwits(self, ticker: str) -> List[Dict]:
+        """Fetches headlines from StockTwits RSS feeds using feedparser."""
+        self._throttle('StockTwits')
+        if not HAS_FEEDPARSER:
+            logger.warning("`feedparser` library not found. StockTwits scraping is disabled. Please run 'pip install feedparser'.")
+            return []
+        headlines = []
+        try:
+            stocktwits_rss_url = f"https://api.stocktwits.com/api/2/streams/symbol/{ticker}.rss"
+            feed = feedparser.parse(stocktwits_rss_url, agent=self.headers['User-Agent'])
+
+            for entry in feed.entries:
+                published_time = datetime.now() # Fallback
+                if hasattr(entry, 'published_parsed') and entry.published_parsed:
+                    published_time = datetime.fromtimestamp(time.mktime(entry.published_parsed))
+
+                # Filter out entries older than 7 days to keep it relevant
+                if (datetime.now() - published_time) < timedelta(days=7):
+                    # StockTwits titles can be long, often the full message.
+                    # The 'summary' often contains the same text. We'll use the title.
+                    headlines.append({
+                        'source': 'StockTwits',
+                        'title': entry.title,
+                        'url': entry.link,
+                        'published': published_time.isoformat()
+                    })
+        except Exception as e:
+            logger.warning(f"Failed to fetch or parse StockTwits RSS feed for {ticker}: {e}")
+
+        return headlines
+
+    def _get_headlines_from_google_news(self, ticker: str) -> List[Dict]:
+        """Fetches headlines from Google News RSS feeds using feedparser."""
+        self._throttle('GoogleNews')
+        if not HAS_FEEDPARSER:
+            logger.warning("`feedparser` library not found. Google News scraping is disabled. Please run 'pip install feedparser'.")
+            return []
+        headlines = []
+        try:
+            # Query for the ticker symbol and the word "stock" for relevance
+            search_query = quote_plus(f'"{ticker}" stock')
+            google_news_rss_url = f"https://news.google.com/rss/search?q={search_query}&hl=en-US&gl=US&ceid=US:en"
+            feed = feedparser.parse(google_news_rss_url, agent=self.headers['User-Agent'])
+
+            for entry in feed.entries:
+                published_time = datetime.now() # Fallback
+                if hasattr(entry, 'published_parsed') and entry.published_parsed:
+                    published_time = datetime.fromtimestamp(time.mktime(entry.published_parsed))
+
+                if (datetime.now() - published_time) < timedelta(days=7):
+                    headlines.append({
+                        'source': 'GoogleNews',
+                        'title': entry.title,
+                        'url': entry.link,
+                        'published': published_time.isoformat()
+                    })
+        except Exception as e:
+            logger.warning(f"Failed to fetch or parse Google News RSS feed for {ticker}: {e}")
+        return headlines
+
+    def _get_headlines_from_nasdaq(self, ticker: str) -> List[Dict]:
+        """Fetches headlines from Nasdaq's official news RSS feed for a ticker."""
+        self._throttle('Nasdaq')
+        if not HAS_FEEDPARSER:
+            logger.warning("`feedparser` library not found. Nasdaq scraping is disabled. Please run 'pip install feedparser'.")
+            return []
+        headlines = []
+        try:
+            nasdaq_rss_url = f"https://www.nasdaq.com/feed/rss/symbol/{ticker.upper()}/news"
+            feed = feedparser.parse(nasdaq_rss_url, agent=self.headers['User-Agent'])
+
+            for entry in feed.entries:
+                published_time = datetime.now() # Fallback
+                if hasattr(entry, 'published_parsed') and entry.published_parsed:
+                    published_time = datetime.fromtimestamp(time.mktime(entry.published_parsed))
+
+                headlines.append({
+                    'source': 'Nasdaq',
+                    'title': entry.title,
+                    'url': entry.link,
+                    'published': published_time.isoformat()
+                })
+        except Exception as e:
+            logger.warning(f"Failed to fetch or parse Nasdaq RSS feed for {ticker}: {e}")
+        return headlines
+
+    def _get_headlines_from_social(self, ticker: str) -> List[Dict]:
+        """
+        Legacy wrapper for fetching from both Reddit and StockTwits.
+        """
+        logger.warning("'_get_headlines_from_social' is deprecated. Use specific Reddit/StockTwits methods.")
+        return headlines
+
+    def _get_headlines_from_x(self, ticker: str) -> List[Dict]:
+        """
+        Fetches recent tweets containing the ticker symbol using the X API (v2).
+
+        This requires the `tweepy` library and an X API Bearer Token.
+        The Bearer Token should be stored as the 'X_API_BEARER_TOKEN' secret.
+        """
+        self._throttle('X')
+        if not HAS_TWEEPY:
+            logger.warning("`tweepy` library not found. X integration is disabled. Please run 'pip install tweepy'.")
+            return []
+
+        bearer_token = get_secret('X_API_BEARER_TOKEN')
+        if not bearer_token:
+            logger.warning("X API Bearer Token not found. Skipping X source.")
+            return []
+
+        try:
+            client = tweepy.Client(bearer_token)
+            
+            # Search for recent tweets with the cashtag (e.g., $TSLA)
+            # We exclude retweets and replies for higher signal-to-noise ratio.
+            # We also request public_metrics for engagement data.
+            query = f"${ticker} -is:retweet -is:reply"
+            response = client.search_recent_tweets(
+                query,
+                tweet_fields=["id", "text", "created_at", "public_metrics"],
+                max_results=25  # Fetch up to 25 recent tweets
+            )
+
+            tweets = response.data
+            if not tweets:
+                return []
+
+            headlines = []
+            for tweet in tweets:
+                headlines.append({
+                    'source': 'X',
+                    'title': tweet.text,
+                    'url': f"https://twitter.com/anyuser/status/{tweet.id}",
+                    'published': tweet.created_at.isoformat(),
+                    'metrics': tweet.public_metrics  # e.g., {'retweet_count': 0, 'reply_count': 0, 'like_count': 0, 'quote_count': 0}
+                })
+            return headlines
+        except Exception as e:
+            logger.error(f"Failed to fetch tweets for ${ticker}: {e}")
+            return []
+
     def get_headlines_from_finviz(self, ticker: str) -> List[Dict]:
         return self._get_headlines_from_finviz(ticker)
 
@@ -195,6 +435,21 @@ class SentimentScraper:
 
     def get_headlines_from_sec(self, ticker: str) -> List[Dict]:
         return self._get_headlines_from_sec(ticker)
+
+    def get_headlines_from_reddit(self, ticker: str) -> List[Dict]:
+        return self._get_headlines_from_reddit(ticker)
+
+    def get_headlines_from_stocktwits(self, ticker: str) -> List[Dict]:
+        return self._get_headlines_from_stocktwits(ticker)
+
+    def get_headlines_from_google_news(self, ticker: str) -> List[Dict]:
+        return self._get_headlines_from_google_news(ticker)
+
+    def get_headlines_from_nasdaq(self, ticker: str) -> List[Dict]:
+        return self._get_headlines_from_nasdaq(ticker)
+
+    def get_headlines_from_x(self, ticker: str) -> List[Dict]:
+        return self._get_headlines_from_x(ticker)
 
     def get_headlines(self, ticker: str, sources: List[str] | None = None) -> List[Dict]:
         headlines, _ = self.get_headlines_with_status(ticker, sources)
@@ -215,6 +470,22 @@ class SentimentScraper:
             'finviz': self.get_headlines_from_finviz,
             'yahoo': self.get_headlines_from_yahoo_rss,
             'sec': self.get_headlines_from_sec,
+            'reddit': self.get_headlines_from_reddit,
+            'stocktwits': self.get_headlines_from_stocktwits,
+            'googlenews': self.get_headlines_from_google_news,
+            'nasdaq': self.get_headlines_from_nasdaq,
+            'x': self.get_headlines_from_x,
+        }
+        # Map internal source names to display names
+        source_display_names = {
+            'finviz': 'Finviz',
+            'yahoo': 'Yahoo',
+            'sec': 'SEC',
+            'reddit': 'Reddit',
+            'stocktwits': 'StockTwits',
+            'googlenews': 'GoogleNews',
+            'nasdaq': 'Nasdaq',
+            'x': 'X',
         }
 
         for source in source_map:
@@ -223,14 +494,12 @@ class SentimentScraper:
                     headlines = source_map[source](ticker)
                     if headlines:
                         all_headlines.extend(headlines)
-                        status_key = 'SEC' if source == 'sec' else source.capitalize()
-                        status[status_key] = {'state': 'ok', 'last_success': datetime.now().isoformat(), 'last_error': None}
+                        status[source_display_names.get(source, source.capitalize())] = {'state': 'ok', 'last_success': datetime.now().isoformat(), 'last_error': None}
                     else:
-                        status_key = 'SEC' if source == 'sec' else source.capitalize()
-                        status[status_key] = {'state': 'no_data', 'last_success': None, 'last_error': 'No headlines returned'}
+                        status[source_display_names.get(source, source.capitalize())] = {'state': 'no_data', 'last_success': None, 'last_error': 'No headlines returned'}
                 except Exception as e:
                     logger.warning(f"Failed to get headlines from {source} for {ticker}: {e}")
-                    status[source.capitalize()] = {'state': 'error', 'last_success': None, 'last_error': str(e)}
+                    status[source_display_names.get(source, source.capitalize())] = {'state': 'error', 'last_success': None, 'last_error': str(e)}
 
         return all_headlines, status
 
@@ -305,42 +574,52 @@ class SentimentScraper:
         return {'overall': final_score, 'per_source': per_source_summary}
 
     @CacheManager.cache_sentiment
-    def get_sentiment_for_ticker(_self, ticker: str) -> Dict:
+    def get_sentiment_for_ticker(_self, ticker: str) -> Tuple[Optional[Dict], Optional[str]]:
         """
         Main public method to get an aggregated sentiment score for a ticker.
-        """
-        _self._load_config() # Reload config in case settings changed
-        # If an extension or test has patched a simplified inline gatherer, prefer it
-        if hasattr(_self, '_gather_headlines'):
-            try:
-                headlines = _self._gather_headlines(ticker, None)
-                # If using the patched _gather_headlines, synthesize OK statuses per source
-                status = {s: {'state': 'ok', 'last_success': None, 'last_error': None} for s in set((h.get('source') for h in headlines))}
-            except Exception:
-                headlines, status = _self._gather_headlines_with_status(ticker)
-        else:
-            headlines, status = _self._gather_headlines_with_status(ticker)
 
-        if not headlines:
-            return {
-                'score': 0.0,
-                'num_headlines': 0,
-                'headlines': [],
-                'per_source': {},
+        Returns:
+            A tuple of (sentiment_dict, None) on success, or (None, error_message) on failure.
+        """
+        try:
+            _self._load_config() # Reload config in case settings changed
+            # If an extension or test has patched a simplified inline gatherer, prefer it
+            if hasattr(_self, '_gather_headlines'):
+                try:
+                    headlines = _self._gather_headlines(ticker, None)
+                    # If using the patched _gather_headlines, synthesize OK statuses per source
+                    status = {s: {'state': 'ok', 'last_success': None, 'last_error': None} for s in set((h.get('source') for h in headlines))}
+                except Exception:
+                    headlines, status = _self._gather_headlines_with_status(ticker)
+            else:
+                headlines, status = _self._gather_headlines_with_status(ticker)
+
+            if not headlines:
+                result = {
+                    'score': 0.0,
+                    'num_headlines': 0,
+                    'headlines': [],
+                    'per_source': {},
+                    'source_status': status
+                }
+                return result, None
+
+            # Score all headlines
+            for h in headlines:
+                if 'score' not in h:
+                    h['score'] = _self._score_headline(h['title'])
+
+            aggregation = _self._aggregate_scores(headlines)
+
+            result = {
+                'score': aggregation['overall'],
+                'num_headlines': len(headlines),
+                'headlines': headlines,
+                'per_source': aggregation['per_source'],
                 'source_status': status
             }
-
-        # Score all headlines
-        for h in headlines:
-            if 'score' not in h:
-                h['score'] = _self._score_headline(h['title'])
-
-        aggregation = _self._aggregate_scores(headlines)
-
-        return {
-            'score': aggregation['overall'],
-            'num_headlines': len(headlines),
-            'headlines': headlines,
-            'per_source': aggregation['per_source'],
-            'source_status': status
-        }
+            return result, None
+        except Exception as e:
+            error_message = f'Failed to get sentiment for {ticker}: {e}'
+            logger.exception(error_message)
+            return None, error_message

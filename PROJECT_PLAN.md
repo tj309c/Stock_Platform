@@ -4,23 +4,28 @@ Last Updated: 2025-11-17
 
 STATUS LEGEND:
 
+[COMPLETE] - Task successfully finished.
+[IN PROGRESS] - Task is partially complete.
 [PENDING] - Task not yet started.
 
-[COMPLETE] - Task successfully finished.
-
-CURRENT STATUS: Phase 0 COMPLETE | Phase 1 IN PROGRESS (55%)
+CURRENT STATUS: Phase 0 COMPLETE | Phase 1 IN PROGRESS (80%)
 
 CURRENT PRIORITY: Finish remaining Phase 1 Pipelines and begin Phase 2 Engine Development.
 
+**GUIDING PRINCIPLE: PERFORMANCE-FIRST DESIGN**
+All development should prioritize speed and responsiveness. Computationally intensive features (e.g., Monte Carlo simulations, deep backtests) should be designed as optional deep-dives to maintain a fluid user experience, in line with the project's core philosophy.
+
 ################################################################################
 
-PHASE 1: CORE DASHBOARDS & PIPELINES (55% Complete)
+PHASE 1: CORE DASHBOARDS & PIPELINES (80% Complete)
 
 ################################################################################
 
 --- Data Pipelines ---
 
-[PENDING] get_sentiment_scraper.py: Implement SEC EDGAR Form 4 (insider trades) and 8-K (material events) RSS feeds scraper.
+[COMPLETE] get_sentiment_scraper.py: Implement core sentiment data sources (Finviz, Yahoo, SEC EDGAR).
+[COMPLETE] get_sentiment_scraper.py: Implement social media sentiment sources (Reddit, StockTwits, X/Twitter).
+[COMPLETE] get_sentiment_scraper.py: Implement mainstream & official news sentiment sources (Google News, Nasdaq).
 [PENDING] get_economic_data.py: Implement data fetching from fredapi (for macro) and eia-python (for energy inventories, STEO).
 [PENDING] get_fmp_data.py: Implement core FMP pipeline functions: get_company_profile, get_earnings_surprises, get_analyst_consensus, and get_key_metrics.
 
@@ -29,6 +34,8 @@ PHASE 1: CORE DASHBOARDS & PIPELINES (55% Complete)
 [PENDING] Settings UI: Implement server-backed settings storage and Role/ACL logic for multi-user configuration.
 [PENDING] Settings UI: Add audit trail/undo history for settings changes.
 [PENDING] Debugging: Add automated issue reporting or log collection for maintainers.
+
+NOTE: `AppConfig` (`cfg`) now exposes `cfg.secrets` for compatibility. Additionally, `pro_indicator_engine.py` supports a fallback path for `pandas_ta` versions missing `Strategy`.
 
 ################################################################################
 
@@ -205,4 +212,5 @@ PHASE 10: UX, FINALIZATION, & TESTING (10% Complete)
 [PENDING] UX: Review and optimize for mobile responsiveness.
 [PENDING] UX: Implement keyboard shortcuts for power users.
 [PENDING] Code Quality: Final code cleanup and documentation review.
+[PENDING] Performance: Profile the entire application to identify and optimize bottlenecks in data pipelines, rendering, and calculations.
 [PENDING] CI: Add acceptance tests for Settings UI in CI and snapshot tests covering the preview chart logic.

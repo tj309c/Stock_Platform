@@ -4,3 +4,6 @@ flake8
 pyflakes
 black
 playwright
+Flask
+nltk
+plotly[kaleido]

@@ -42,14 +42,20 @@ class FailingExchange:
 def test_skip_setting_secret_when_pem(monkeypatch):
     # Arrange
     pem_secret = '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBK...'  # truncated
-    monkeypatch.setattr(AppConfig, 'coinbase_private_key', pem_secret, raising=False)
-    monkeypatch.setattr(AppConfig, 'coinbase_api_name', 'dummy_key', raising=False)
+    # Set kraken secrets for pipeline initialization via get_secret lookup
+    def fake_get_secret(key):
+        if key == 'KRAKEN_API_KEY' or key == 'KRAKEN_API_NAME':
+            return 'abc'
+        if key == 'KRAKEN_API_SECRET' or key == 'KRAKEN_PRIVATE_KEY':
+            return pem_secret
+        return None
+    monkeypatch.setattr('src.pipelines.get_crypto_data.get_secret', fake_get_secret, raising=False)
 
-    # Patch ccxt.coinbase to capture opts
+    # Patch ccxt.kraken to capture opts
     import ccxt
-    monkeypatch.setattr(ccxt, 'coinbase', lambda opts=None: FakeExchange(opts))
+    monkeypatch.setattr(ccxt, 'kraken', lambda opts=None: FakeExchange(opts))
 
-    pipeline = CryptoDataPipeline(exchange_id='coinbase')
+    pipeline = CryptoDataPipeline(exchange_id='kraken')
 
     # Act
     exch = pipeline.exchange
@@ -60,16 +66,15 @@ def test_skip_setting_secret_when_pem(monkeypatch):
 
 def test_fallback_on_indexerror(monkeypatch):
     # Arrange - set a classic key/secret but ccxt raises IndexError
-    monkeypatch.setattr(AppConfig, 'coinbase_private_key', 'classicsecretvalue', raising=False)
-    monkeypatch.setattr(AppConfig, 'coinbase_api_name', 'classicapikey', raising=False)
+    monkeypatch.setattr('src.pipelines.get_crypto_data.get_secret', lambda k: 'classicsecretvalue' if 'KRAKEN' in k or 'EXCHANGE_API_KEY' in k else None, raising=False)
 
     import ccxt
-    # Coinbase will raise IndexError on fetch_ohlcv
-    monkeypatch.setattr(ccxt, 'coinbase', lambda opts=None: FailingExchange(opts))
-    # Binance will succeed
-    monkeypatch.setattr(ccxt, 'binance', lambda opts=None: FakeExchange(opts))
+    # Kraken will raise IndexError on fetch_ohlcv
+    monkeypatch.setattr(ccxt, 'kraken', lambda opts=None: FailingExchange(opts))
+    # Bitstamp will succeed as a public fallback
+    monkeypatch.setattr(ccxt, 'bitstamp', lambda opts=None: FakeExchange(opts))
 
-    pipeline = CryptoDataPipeline(exchange_id='coinbase')
+    pipeline = CryptoDataPipeline(exchange_id='kraken')
 
     # Act
     df = pipeline.get_crypto_price('BTC/USDT', timeframe='1d', limit=1)

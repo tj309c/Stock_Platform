@@ -4,7 +4,7 @@
 
 ### Method 1: Double-Click Batch File (EASIEST)
 ```
-Simply double-click: run_app.bat
+Simply double-click: scripts\run_app_with_venv.bat
 ```
 This automatically runs the app from your virtual environment!
 
@@ -53,7 +53,7 @@ Once running, open your browser to:
 
 ### Issue: "ModuleNotFoundError: No module named 'X'"
 **Cause:** Running streamlit from global Python instead of venv
-**Solution:** Always use `venv\Scripts\streamlit` or run `run_app.bat`
+**Solution:** Always use `venv\Scripts\streamlit` or run `scripts\run_app_with_venv.bat`
 
 ### Issue: "Port 8501 is already in use"
 **Solution:**
@@ -81,6 +81,12 @@ venv\Scripts\python.exe -m pip install -r requirements.txt --upgrade
 3. Run app: `venv\Scripts\streamlit run main.py`
 4. Open browser to http://localhost:8501
 5. Edit code - Streamlit auto-reloads!
+
+Optionally: Use the helper `dev.bat` to run the app and related services. Pass `--skip-install` to avoid re-installing requirements for faster startup:
+
+```bat
+dev.bat start --skip-install
+```
 
 ### Checking Current Progress
 1. Open `PROJECT_PLAN.md` to see what's complete
@@ -224,7 +230,7 @@ MetricCardRenderer.render_metric(
 ## Remember
 
 - ✅ Always run from venv: `venv\Scripts\streamlit`
-- ✅ Use `run_app.bat` for easiest startup
+- ✅ Use `scripts\run_app_with_venv.bat` for easiest startup
 - ✅ API keys in `.streamlit/secrets.toml` (never commit!)
 - ✅ Update `PROJECT_PLAN.md` as you complete tasks
 - ✅ Cache expensive operations with `@CacheManager` decorators

@@ -1,0 +1,25 @@
+name: BAT Integrity Check
+
+on:
+  push:
+    paths:
+      - '**/*.bat'
+      - 'scripts/check_bat_files.py'
+  pull_request:
+    paths:
+      - '**/*.bat'
+      - 'scripts/check_bat_files.py'
+
+jobs:
+  check-bat-files:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+      - name: Run BAT integrity check
+        run: |
+          python scripts/check_bat_files.py
+        shell: bash

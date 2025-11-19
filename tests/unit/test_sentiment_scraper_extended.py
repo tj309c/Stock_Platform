@@ -118,7 +118,8 @@ def test_sec_parsing_and_sentiment(monkeypatch):
     assert isinstance(status, dict)
     assert status.get('SEC')['state'] == 'ok'
 
-    sentiment = s.get_sentiment_for_ticker('AAPL')
+    sentiment, err = s.get_sentiment_for_ticker('AAPL')
+    assert err is None
     assert 'score' in sentiment
     assert 'num_headlines' in sentiment
     assert 'per_source' in sentiment

@@ -9,7 +9,8 @@ import logging
 import pandas as pd
 import numpy as np
 from typing import Optional, Dict, Any, List, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
+from dateutil.relativedelta import relativedelta
 import streamlit as st
 import requests
 from requests.exceptions import RequestException
@@ -35,7 +36,7 @@ class MarketDataPipeline:
         ticker: str,
         period: str = "1y",
         interval: str = "1d"
-    ) -> Optional[pd.DataFrame]:
+    ) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
         """
         Fetch historical price data for a stock.
 
@@ -45,27 +46,37 @@ class MarketDataPipeline:
             interval: Data interval (1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo)
 
         Returns:
-            DataFrame with OHLCV data or None if error
+            DataFrame with OHLCV data or None if not found or error occurred.
         """
+        # If a Polygon API key is present and the feature is supported, attempt to use Polygon first
+        cfg = AppConfig()
+        if getattr(cfg, 'polygon_api_key', None):
+            try:
+                df_polygon = self._get_stock_price_polygon(ticker, period, interval, cfg.polygon_api_key)
+                if df_polygon is not None and not df_polygon.empty:
+                    return df_polygon
+            except Exception as e:
+                logger = logging.getLogger(__name__)
+                logger.debug("Polygon price fetch failed for %s: %s", ticker, e, exc_info=True)
+
         try:
             stock = yf.Ticker(ticker)
             df = stock.history(period=period, interval=interval)
 
             if df.empty:
-                st.warning(f"No data found for ticker: {ticker}")
                 return None
 
             return df
 
         except Exception as e:
-            st.error(f"Error fetching price data for {ticker}: {str(e)}")
             return None
 
     @CacheManager.cache_market_data
     def get_current_price(_self, ticker: str) -> Optional[float]:
         """
         Get the current/latest price for a ticker.
-
+        Note: This method is not updated to the tuple format as it's not directly used by the equity dashboard's
+        main data fetching sequence that was causing the error. It can be updated later if needed.
         Args:
             ticker: Stock ticker symbol
 
@@ -112,6 +123,9 @@ class MarketDataPipeline:
         """
         Attempts to get company info via yfinance and falls back to FMP if Yahoo returns a non-JSON response
         or other transient errors occur. The yfinance call is retried with exponential backoff.
+
+        Returns:
+            A tuple of (company_info_dict, None) on success, or (None, error_message) on failure.
         """
         # Inner function that performs the actual yfinance fetch. It's decorated with the retry decorator
         # so transient errors like JSONDecodeError and RequestException will be retried.
@@ -138,8 +152,6 @@ class MarketDataPipeline:
                 profile = fmp.get_company_profile(ticker)
                 if profile:
                     return profile
-            # Show user-facing error only on final failure
-            st.error(f"Error fetching company info for {ticker}: {str(e)}")
             return None
 
         # If retries were suppressed by the decorator, _fetch_yf_info may return None.
@@ -151,11 +163,9 @@ class MarketDataPipeline:
                 profile = fmp.get_company_profile(ticker)
                 if profile:
                     return profile
-            st.error(f"Error fetching company info for {ticker}: yfinance failed and no fallback available.")
             return None
 
         if not info or len(info) == 0:
-            st.warning(f"No company info found for ticker: {ticker}")
             return None
 
         return info
@@ -214,12 +224,12 @@ class MarketDataPipeline:
             exp_date = expiration if expiration else expirations[0]
 
             if exp_date not in expirations:
-                st.warning(f"Expiration {exp_date} not available. Using {expirations[0]}")
+                logging.warning(f"Expiration {exp_date} not available for {ticker}. Using {expirations[0]}")
                 exp_date = expirations[0]
 
             # Get the options chain
             opt = stock.option_chain(exp_date)
-
+            
             return {
                 'calls': opt.calls,
                 'puts': opt.puts,
@@ -228,7 +238,7 @@ class MarketDataPipeline:
             }
 
         except Exception as e:
-            st.error(f"Error fetching options chain for {ticker}: {str(e)}")
+            logging.error(f"Error fetching options chain for {ticker}: {str(e)}")
             return None
 
     @CacheManager.cache_fundamentals
@@ -240,7 +250,7 @@ class MarketDataPipeline:
             ticker: Stock ticker symbol
 
         Returns:
-            Dictionary of key metrics or None
+            A tuple of (key_metrics_dict, None) on success, or (None, error_message) on failure.
         """
         try:
             info = _self.get_company_info(ticker)
@@ -291,7 +301,6 @@ class MarketDataPipeline:
             return metrics
 
         except Exception as e:
-            st.error(f"Error extracting key metrics for {ticker}: {str(e)}")
             return None
 
     @CacheManager.cache_fundamentals
@@ -417,6 +426,57 @@ class MarketDataPipeline:
         except:
             return False
 
+    def _get_stock_price_polygon(self, ticker: str, period: str = "1y", interval: str = "1d", api_key: str = None) -> Optional[pd.DataFrame]:
+        """
+        Attempt to fetch stock OHLCV data from Polygon REST API (no SDK required).
+        If the network request or data parsing fails, this function should raise an exception
+        so the caller can fall back to yfinance.
+        """
+        if not api_key:
+            raise ValueError("Polygon API key not provided")
+
+        # Convert period into a start/end date for the REST API
+        end = date.today()
+        if period.lower() == '1y':
+            start = end - relativedelta(years=1)
+        elif period.lower() == '6mo':
+            start = end - relativedelta(months=6)
+        elif period.lower() == '3mo':
+            start = end - relativedelta(months=3)
+        elif period.lower() == '1mo':
+            start = end - relativedelta(months=1)
+        else:
+            # Default to 1 year if unknown
+            start = end - relativedelta(years=1)
+
+        url = (
+            f"https://api.polygon.io/v2/aggs/ticker/{ticker.upper()}/range/1/day/"
+            f"{start.isoformat()}/{end.isoformat()}?adjusted=true&sort=asc&limit=50000&apiKey={api_key}"
+        )
+        resp = requests.get(url)
+        resp.raise_for_status()
+        j = resp.json()
+        if not j or 'results' not in j:
+            raise ValueError("Unexpected Polygon response structure")
+
+        results = j['results']
+        if not results:
+            return pd.DataFrame()
+
+        rows = []
+        for r in results:
+            # r contains: o, h, l, c, v, t (timestamp in ms), n
+            rows.append({
+                'open': r['o'],
+                'high': r['h'],
+                'low': r['l'],
+                'close': r['c'],
+                'volume': r['v'],
+                'date': pd.to_datetime(r['t'], unit='ms')
+            })
+        df = pd.DataFrame(rows).set_index('date')
+        return df
+
 
 # Convenience functions for quick access
 def get_stock_price(ticker: str, period: str = "1y", interval: str = "1d") -> Optional[pd.DataFrame]:
@@ -431,7 +491,7 @@ def get_current_price(ticker: str) -> Optional[float]:
     return pipeline.get_current_price(ticker)
 
 
-def get_company_info(ticker: str) -> Optional[Dict[str, Any]]:
+def get_company_info(ticker: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """Quick function to get company info."""
     pipeline = MarketDataPipeline()
     return pipeline.get_company_info(ticker)

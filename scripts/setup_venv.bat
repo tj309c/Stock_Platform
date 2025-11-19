@@ -2,10 +2,10 @@
 REM scripts/setup_venv.bat - Create .venv and install runtime and dev requirements
 
 cd %~dp0\..
-if not exist .venv (
+IF NOT EXIST ".venv\Scripts\python.exe" (
     py -3.12 -m venv .venv
 )
-call .venv\Scripts\activate
+call scripts\venv_helpers.bat activate
 python -m pip install --upgrade pip wheel
 
 if exist requirements.txt (

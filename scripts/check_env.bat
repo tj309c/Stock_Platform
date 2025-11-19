@@ -1,14 +1,7 @@
 @echo off
 REM Run a set of environment checks (Python packages and connectivity)
 SETLOCAL
-REM Try to use project venv if it exists
-SET "VENV_PY=%~dp0..\.venv\Scripts\python.exe"
-IF NOT EXIST "%VENV_PY%" (
-    SET "VENV_PY=%~dp0..\venv\Scripts\python.exe"
-)
-IF NOT EXIST "%VENV_PY%" (
-    SET "VENV_PY=python"
-)
+call "%~dp0\venv_helpers.bat"
 
 echo Using Python: %VENV_PY%
 %VENV_PY% scripts\check_environment.py

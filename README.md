@@ -22,6 +22,8 @@ Predictive Modeling: LLM-powered forecasting using "digital landscape" variables
 
 Portfolio Optimization: Modern Portfolio Theory with efficient frontier analysis.
 
+**Performance-First Design**: The platform is engineered for speed and responsiveness. Every component, from data pipelines to UI rendering, is optimized for performance. Slower, computationally intensive operations (like Monte Carlo simulations or deep backtesting) are implemented only where they provide a significant analytical advantage and are designed to be optional deep-dives to maintain a fluid user experience.
+
 🚀 Core Architecture: 7 Dashboards, 1 Co-pilot, 1 Final Report
 
 The platform is built around 7 specialized dashboards, a consistent design_system (ThemeManager, MetricCardRenderer), an ambient "AI Co-pilot," and a final, exportable report.
@@ -157,12 +159,12 @@ Metrics: Beta (Market Correlation), Rolling Volatility, Sharpe Ratio, Sortino Ra
 Value at Risk (VaR) and Conditional VVaR (CVaR).
 
 Sentiment & News:
-
-Real-time sentiment from Reddit, Twitter/X, and StockTwits.
-
-Latest news feed from financial news APIs.
-
-API-Free Scraper: Fallback scraper for Finviz, and Yahoo Finance RSS.
+A multi-source sentiment engine that aggregates data from:
+- **Social Media:** Reddit, StockTwits, and X (formerly Twitter).
+- **Mainstream News:** Google News.
+- **Financial News:** Finviz, Yahoo Finance.
+- **Official Sources:** Nasdaq (company news) and SEC EDGAR (filings).
+- The engine uses a combination of API-free RSS feeds and official APIs where necessary.
 
 Institutional & Insider Tracking:
 
@@ -420,13 +422,12 @@ Primary source, real-time data. Used for insider trade tracking and material eve
 
 Alternative & Sentiment (API-Based)
 
-praw (Reddit API), snscrape (Twitter/X), StockTwits API, NewsAPI.org (Dev Plan)
-
+praw (Reddit API), tweepy (X/Twitter API v2), StockTwits API, NewsAPI.org (Dev Plan)
 High-quality, real-time psychology. Feed sentiment velocity/scores into LLM to detect market shifts.
 
 Alternative & Sentiment (API-Free)
 
-BeautifulSoup + requests scraping of old.reddit.com, Finviz, and Yahoo Finance RSS.
+BeautifulSoup, feedparser, and requests scraping of Finviz, Yahoo Finance, Google News, Nasdaq, Reddit, and StockTwits RSS feeds.
 
 100% free data source. No API keys required. Excellent for core sentiment analysis as a fallback or primary data feed.
 
@@ -510,6 +511,7 @@ REDDIT_CLIENT_ID = "your_reddit_client_id"
 REDDIT_CLIENT_SECRET = "your_reddit_client_secret"
 REDDIT_USER_AGENT = "AnalysisMaster/1.0"
 NEWS_API_KEY = "your_newsapi_key"
+X_API_BEARER_TOKEN = "your_x_api_bearer_token_for_v2_search"
 
 # === OPTIONAL: Enhanced Features ===
 FINNHUB_API_KEY = "your_finnhub_key"
@@ -520,33 +522,42 @@ EIA_API_KEY = "your_eia_key"
 
 Note: Streamlit loads secrets from `.streamlit/secrets.toml`. If you keep your credentials in a `secrets.toml` at the repository root (not in `.streamlit`), they won't be picked up by Streamlit. Move the file to `.streamlit/secrets.toml` or export keys as environment variables.
 
-Coinbase (CCXT) Credentials
+Exchange Credentials (Kraken recommended)
 --------------------------------
-If you want to use private, authenticated Coinbase endpoints (e.g., detailed orderbooks or account-specific endpoints), provide credentials in `.streamlit/secrets.toml` as follows (preferred names):
+If you want to use private, authenticated exchange endpoints (e.g., detailed orderbooks or account-specific endpoints via CCXT), provide credentials in `.streamlit/secrets.toml` as follows (preferred names for Kraken):
 
 ```toml
-COINBASE_API_NAME = "your_coinbase_api_key"  # preferred name
-COINBASE_PRIVATE_KEY = "your_coinbase_api_secret"  # preferred name for the secret / private key
-COINBASE_API_PASSWORD = "your_coinbase_api_password"  # passphrase if applicable
-COINBASE_API_SECRET = "your_coinbase_api_secret"
-COINBASE_API_PASSWORD = "your_coinbase_password"  # if required
+KRAKEN_API_KEY = "your_kraken_api_key"  # preferred name
+KRAKEN_API_SECRET = "your_kraken_api_secret"  # preferred name for the secret / private key
+KRAKEN_API_PASSWORD = "your_kraken_api_password"  # passphrase if applicable (if required by the exchange)
+## Legacy Coinbase names are still accepted as aliases during migration:
+# COINBASE_API_NAME, COINBASE_API_SECRET, COINBASE_API_PASSWORD
 ```
 
 For local development scripts that are not part of the Streamlit application, you can also use a `.env` file at the project root. This file is ignored by Git and is a secure way to store your keys.
 
-Backwards compatibility: The application supports legacy environment variable names for Coinbase for convenience. If you still use the old keys, they will be read as follows:
-- `COINBASE_API_KEY` -> `coinbase_api_name` (legacy)
-- `COINBASE_API_SECRET` -> `coinbase_private_key` (legacy secret name)
-- `COINBASE_API_PASSWORD` / `COINBASE_PASSPHRASE` -> `coinbase_api_password`
+Backwards compatibility: The application supports legacy Coinbase/Binance keys as aliases for migration convenience. If you still use the old keys, they will be accepted and mapped to the exchange credentials. We recommend using `KRAKEN_API_KEY`, `KRAKEN_API_SECRET`, and `KRAKEN_API_PASSWORD` (or the equivalent for your preferred exchange) going forward.
 
-We recommend using the newer keys (`COINBASE_API_NAME`, `COINBASE_PRIVATE_KEY`, `COINBASE_API_PASSWORD`) going forward for clarity, but legacy names will still work.
+Note for developers & CI:
+- The `pro_indicator_engine` will prefer `pandas_ta.Strategy` when available; however the code now includes a fallback implementation that calculates SMA/EMA/RSI/MACD/Bollinger/ATR/Stochastic manually (or using `DataFrame.ta.*`) if `Strategy` is not present. To avoid surprises, pin `pandas_ta` to a compatible version in `requirements.txt` (current repo uses `pandas-ta==0.4.71b0`).
+- Some tests and the sentiment module rely on NLTK (VADER). Install NLTK and download the VADER lexicon before running tests or the app's sentiment features:
 
-Example `.env` file:
+    ```bash
+    .venv\Scripts\activate
+    pip install -r requirements-dev.txt
+    python -m nltk.downloader vader_lexicon
+    ```
+
+- For server-related tests (Flask endpoints), install dev requirements which now include `Flask`.
+
+If you're working with CI pipelines, make sure `pip install -r requirements-dev.txt` is part of the pipeline before tests run.
+
+Example `.env` file (use KRAKEN for default exchange):
 
 ```
-COINBASE_API_KEY = "your_coinbase_api_key"
-COINBASE_API_SECRET = "your_coinbase_api_secret"
-COINBASE_API_PASSWORD = "your_coinbase_password"  # if required
+KRAKEN_API_KEY = "your_kraken_api_key"
+KRAKEN_API_SECRET = "your_kraken_api_secret"
+KRAKEN_API_PASSWORD = "your_kraken_api_password"  # if required
 
 Developer note: A helper script is available to help migrate a repo-root `secrets.toml` to `.streamlit/secrets.toml`.
 Usage:
@@ -558,18 +569,18 @@ COINBASE_API_SECRET = "your_coinbase_api_secret"
 COINBASE_API_PASSWORD = "your_coinbase_password"  # if required
  
 Important notes & troubleshooting:
-- Coinbase Cloud keys (often starting with `organizations/...`) are not the same as "classic" API keys — CCXT may not support organization-style keys for authenticated access. If you see 401 Unauthorized errors or `coinbasepro` returns 503s, consider creating a **classic API key+secret+passphrase** for CCXT, or use the official Coinbase Cloud SDK if you must use organization keys.
+ - Organization-style keys (often starting with `organizations/...`) are not the same as "classic" API keys — CCXT may not support organization-style keys for some exchanges. If you see 401/403 errors or unexpected responses, consider creating a **classic API key+secret+passphrase** for use with CCXT or consult the official exchange SDK to use organization-style keys.
 - If you paste a multi-line PEM into `COINBASE_API_SECRET`, make sure to use triple-quoted TOML strings to avoid parsing errors, or use the helper script `scripts/convert_pem_secret_to_toml.py` to automatically convert it to a TOML multiline block.
 
-Fallback & operational guidance if Coinbase access fails:
+Fallback & operational guidance if exchange access fails:
 -----------------------------------------------------
 - If Coinbase connectivity or auth still fails (401/403/503), you can keep using public data sources that are already integrated and supported:
-    - CCXT public exchanges (e.g. `kraken`, `binance`) will still provide price tickers and OHLCV data as a reliable fallback.
+    - CCXT public exchanges (e.g. `kraken`) will still provide price tickers and OHLCV data as a reliable fallback.
     - CoinGecko (free API) and yfinance provide robust fallback data for crypto and equities respectively.
 - Recommended operational approach:
     1. Prefer classic Coinbase API keys for CCXT (plain secret) if CCXT authenticated features are required.
-    2. If you must use Coinbase Cloud keys, use `scripts/test_coinbase_cloud.py` with the JSON key and consult Coinbase Cloud docs for exact JWT claims and key permissions.
-    3. If authentication continues to fail, use the public fallback sources (Kraken/Binance/CoinGecko) as the main source for your crypto data pipelines and notify the team to revisit Coinbase integration later.
+    2. If you must use organization-style exchange keys (e.g., Coinbase Cloud), use the vendor-provided SDK or the helper scripts (if available) and consult the exchange docs for exact JWT claims and key permissions.
+    3. If authentication continues to fail, use the public fallback sources (Kraken/CoinGecko) as the main source for your crypto data pipelines and notify the team to revisit Coinbase/Binance integration later.
     4. The repo includes `scripts/check_secrets_format.py` and `scripts/convert_pem_secret_to_toml.py` to help detect and fix common paste/formatting mistakes.
 
 How to create a classic Coinbase API key (manual/UI steps):

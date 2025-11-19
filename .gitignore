@@ -1,5 +1,20 @@
 # Environment variables
 .env
+*.env
+
+# Secrets and credentials
+*.toml.bak
+*.secret
+*.pem
+*secrets*
+!.streamlit/secrets.example.toml
+!scripts/check_secrets.py
+!scripts/check_secrets_format.py
+!scripts/untrack_secrets.bat
+!scripts/migrate_repo_secrets_to_dotstreamlit.py
+!scripts/convert_pem_secret_to_toml.py
+!tests/unit/test_check_secrets_format.py
+!tests/unit/test_convert_pem_secret_to_toml.py
 
 # Python cache
 __pycache__/
@@ -7,3 +22,24 @@ __pycache__/
 
 # Virtual environment
 /venv/
+/.venv/
+
+# Streamlit secrets
+/.streamlit/secrets.toml
+/.streamlit/*.toml
+!/.streamlit/config.toml
+!/.streamlit/secrets.example.toml
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Temporary debug files
+tmp_*
+temp_*
+
+# Data and logs
+/data/
+/logs/
+*.log
