@@ -40,3 +40,4 @@ venv.bak/
 # IDE
 .vscode/
 *.zip
+secrets.toml.template
