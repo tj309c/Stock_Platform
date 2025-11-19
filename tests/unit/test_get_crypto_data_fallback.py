@@ -42,8 +42,8 @@ class FailingExchange:
 def test_skip_setting_secret_when_pem(monkeypatch):
     # Arrange
     pem_secret = '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBK...'  # truncated
-    monkeypatch.setattr(AppConfig, 'coinbase_api_secret', pem_secret, raising=False)
-    monkeypatch.setattr(AppConfig, 'coinbase_api_key', 'dummy_key', raising=False)
+    monkeypatch.setattr(AppConfig, 'coinbase_private_key', pem_secret, raising=False)
+    monkeypatch.setattr(AppConfig, 'coinbase_api_name', 'dummy_key', raising=False)
 
     # Patch ccxt.coinbase to capture opts
     import ccxt
@@ -60,8 +60,8 @@ def test_skip_setting_secret_when_pem(monkeypatch):
 
 def test_fallback_on_indexerror(monkeypatch):
     # Arrange - set a classic key/secret but ccxt raises IndexError
-    monkeypatch.setattr(AppConfig, 'coinbase_api_secret', 'classicsecretvalue', raising=False)
-    monkeypatch.setattr(AppConfig, 'coinbase_api_key', 'classicapikey', raising=False)
+    monkeypatch.setattr(AppConfig, 'coinbase_private_key', 'classicsecretvalue', raising=False)
+    monkeypatch.setattr(AppConfig, 'coinbase_api_name', 'classicapikey', raising=False)
 
     import ccxt
     # Coinbase will raise IndexError on fetch_ohlcv

@@ -46,8 +46,8 @@ ccxt.coinbase = lambda opts=None: FailingExchange(opts)
 ccxt.binance = lambda opts=None: FakeExchange(opts)
 
 # Setup config
-AppConfig.coinbase_api_key = 'classicapikey'
-AppConfig.coinbase_api_secret = 'classicsecretvalue'
+AppConfig.coinbase_api_name = 'classicapikey'
+AppConfig.coinbase_private_key = 'classicsecretvalue'
 
 p = CryptoDataPipeline(exchange_id='coinbase')
 print('Requesting ohlcv...')

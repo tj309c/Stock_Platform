@@ -19,8 +19,8 @@ IF NOT EXIST "%VENV_ACTIVATION_SCRIPT%" (
 if not exist "%VENV_ACTIVATION_SCRIPT%" (
     echo [ERROR] Virtual environment activation script not found!
     echo.
-    echo Please ensure Python 3.11 is installed, then run these commands:
-    echo   1. py -3.11 -m venv venv
+    echo Please ensure Python 3.12 or newer is installed, then run these commands:
+    echo   1. py -3.12 -m venv venv
     echo   2. venv\Scripts\pip install -r requirements.txt
     echo.
     pause
@@ -30,6 +30,10 @@ if not exist "%VENV_ACTIVATION_SCRIPT%" (
 REM Activate the virtual environment and run Streamlit
 echo [INFO] Activating virtual environment...
 call "%VENV_ACTIVATION_SCRIPT%"
+
+echo [INFO] Installing/updating requirements...
+pip install -r requirements.txt
+echo.
 
 echo [INFO] Starting Streamlit from virtual environment...
 echo [INFO] App will open at: http://localhost:8501

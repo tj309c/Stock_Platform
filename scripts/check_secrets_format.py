@@ -24,8 +24,8 @@ DEFAULT_SECRETS_FILE = ROOT / ".streamlit" / "secrets.toml"
 def raw_scan_text(text: str) -> dict:
     # find likely keys via regex
     data = {}
-    m_key = re.search(r'COINBASE_API_KEY\s*=\s*"([^"]+)"', text)
-    m_secret = re.search(r'COINBASE_API_SECRET\s*=\s*"([\s\S]*?)"', text)
+    m_key = re.search(r'COINBASE_API_NAME\s*=\s*"([^"]+)"', text) or re.search(r'COINBASE_API_KEY\s*=\s*"([^"]+)"', text)
+    m_secret = re.search(r'COINBASE_PRIVATE_KEY\s*=\s*"([^"]+)"', text) or re.search(r'COINBASE_API_SECRET\s*=\s*"([\s\S]*?)"', text)
     if m_key:
         data['COINBASE_API_KEY'] = m_key.group(1)
     if m_secret:
@@ -57,8 +57,8 @@ def run_check(secrets_file: Path | None = None) -> int:
         print("No .streamlit/secrets.toml found or file could not be parsed; skipping checks.")
         return 0
 
-    ckey = parsed.get('COINBASE_API_KEY')
-    csec = parsed.get('COINBASE_API_SECRET')
+    ckey = parsed.get('COINBASE_API_NAME') or parsed.get('COINBASE_API_KEY')
+    csec = parsed.get('COINBASE_PRIVATE_KEY') or parsed.get('COINBASE_API_SECRET')
 
     # Check for org key
     if ckey and isinstance(ckey, str) and ckey.startswith('organizations/'):

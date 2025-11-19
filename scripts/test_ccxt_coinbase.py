@@ -101,7 +101,7 @@ def load_dotstreamlit_secrets() -> dict:
                 return m.group(1)
             return None
 
-        candidate_keys = ["COINBASE_API_KEY", "COINBASE_API_SECRET", "COINBASE_API_PASSWORD"]
+        candidate_keys = ["COINBASE_API_NAME", "COINBASE_API_KEY", "COINBASE_API_SECRET", "COINBASE_PRIVATE_KEY", "COINBASE_API_PASSWORD", "COINBASE_PASSWORD", "COINBASE_PASSPHRASE"]
         for k in candidate_keys:
             v = _extract_key(raw, k)
             if v is not None:
@@ -116,9 +116,9 @@ def load_dotstreamlit_secrets() -> dict:
 def get_coinbase_credentials_from_env_or_secrets() -> dict:
     # First try environment variables
     creds: dict[str, str | None] = {
-        "apiKey": os.getenv("COINBASE_API_KEY") or os.getenv("COINBASE_KEY"),
-        "secret": os.getenv("COINBASE_API_SECRET") or os.getenv("COINBASE_SECRET"),
-        "password": os.getenv("COINBASE_API_PASSWORD") or os.getenv("COINBASE_PASSPHRASE")
+        "apiKey": os.getenv("COINBASE_API_NAME") or os.getenv("COINBASE_API_KEY") or os.getenv("COINBASE_KEY"),
+        "secret": os.getenv("COINBASE_PRIVATE_KEY") or os.getenv("COINBASE_API_SECRET") or os.getenv("COINBASE_SECRET"),
+        "password": os.getenv("COINBASE_API_PASSWORD") or os.getenv("COINBASE_PASSWORD") or os.getenv("COINBASE_PASSPHRASE")
     }
     creds = {k: v for k, v in creds.items() if v}
     if all(creds.values()):
@@ -140,8 +140,8 @@ def get_coinbase_credentials_from_env_or_secrets() -> dict:
         # Support both variants so the fallback raw parser can still be used.
         if isinstance(secrets, dict):
             # Look for top-level keys
-            top_api_key = secrets.get("COINBASE_API_KEY") or secrets.get("COINBASE_KEY")
-            top_secret = secrets.get("COINBASE_API_SECRET") or secrets.get("COINBASE_SECRET")
+            top_api_key = secrets.get("COINBASE_API_NAME") or secrets.get("COINBASE_API_KEY") or secrets.get("COINBASE_KEY")
+            top_secret = secrets.get("COINBASE_PRIVATE_KEY") or secrets.get("COINBASE_API_SECRET") or secrets.get("COINBASE_SECRET")
             top_pass = secrets.get("COINBASE_API_PASSWORD") or secrets.get("COINBASE_PASSPHRASE")
             if top_api_key or top_secret or top_pass:
                 creds.update({

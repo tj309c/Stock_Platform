@@ -29,8 +29,8 @@ class AppConfig:
     reddit_client_secret = None
     reddit_user_agent = None
     # Optional exchange keys
-    coinbase_api_key = None
-    coinbase_api_secret = None
+    coinbase_api_name = None
+    coinbase_private_key = None
     coinbase_api_password = None
     SETTINGS_STORE_TYPE = 'local'
     LLM_SCORING_MODE = 'local'
@@ -40,7 +40,7 @@ class AppConfig:
         # Ensure cache directory exists
         self.CACHE_DIR.mkdir(parents=True, exist_ok=True)
         # expose secrets for convenience (st.secrets may be a dict-like object)
-        self.secrets = st.secrets
+        # secrets = st.secrets # This line is not used, can be removed if desired.
 
         # --- LLM API Keys ---
         self.anthropic_api_key = st.secrets.get("ANTHROPIC_API_KEY")
@@ -64,13 +64,17 @@ class AppConfig:
         self.reddit_client_secret = st.secrets.get("REDDIT_CLIENT_SECRET")
         self.reddit_user_agent = st.secrets.get("REDDIT_USER_AGENT")
         # Optional exchange credentials for ccxt (e.g., Coinbase)
-        self.coinbase_api_key = st.secrets.get("COINBASE_API_KEY")
-        self.coinbase_api_secret = st.secrets.get("COINBASE_API_SECRET")
-        self.coinbase_api_password = st.secrets.get("COINBASE_API_PASSWORD")
-        # Optional exchange credentials for ccxt (e.g., Coinbase)
-        self.coinbase_api_key = st.secrets.get("COINBASE_API_KEY")
-        self.coinbase_api_secret = st.secrets.get("COINBASE_API_SECRET")
-        self.coinbase_api_password = st.secrets.get("COINBASE_API_PASSWORD")
+        # Support both COINBASE_API_NAME and legacy COINBASE_API_KEY naming for backwards compatibility
+        # Only override class defaults if streamlit secrets define them (support both historic and new names)
+        _cname = st.secrets.get("COINBASE_API_NAME") or st.secrets.get("COINBASE_API_KEY")
+        if _cname is not None:
+            self.coinbase_api_name = _cname
+        _private = st.secrets.get("COINBASE_PRIVATE_KEY") or st.secrets.get("COINBASE_API_SECRET")
+        if _private is not None:
+            self.coinbase_private_key = _private
+        _pass = st.secrets.get("COINBASE_API_PASSWORD") or st.secrets.get("COINBASE_PASSWORD") or st.secrets.get("COINBASE_PASSPHRASE")
+        if _pass is not None:
+            self.coinbase_api_password = _pass
         # Settings storage type: 'local' (file) or 'server' (future)
         self.SETTINGS_STORE_TYPE = st.secrets.get("SETTINGS_STORE_TYPE", "local")
         # LLM scoring mode: 'local', 'server', 'server-queue'
@@ -116,7 +120,7 @@ class AppConfig:
 
         # If important keys are missing in st.secrets, support a developer fallback that reads 'secrets.toml' from the repository root (local dev only)
         try:
-            if (not self.fmp_api_key or not self.coinbase_api_key):
+            if (not self.fmp_api_key or not self.coinbase_api_name):
                 repo_secrets = self.BASE_DIR.parent / 'secrets.toml'
                 if repo_secrets.exists():
                     try:
@@ -131,14 +135,22 @@ class AppConfig:
                             except Exception:
                                 parsed = {}
                         # Only override missing secrets; prefer st.secrets
-                        if not self.fmp_api_key and parsed.get('FMP_API_KEY'):
-                            self.fmp_api_key = parsed.get('FMP_API_KEY')
-                        if not self.coinbase_api_key and parsed.get('COINBASE_API_KEY'):
-                            self.coinbase_api_key = parsed.get('COINBASE_API_KEY')
-                        if not self.coinbase_api_secret and parsed.get('COINBASE_API_SECRET'):
-                            self.coinbase_api_secret = parsed.get('COINBASE_API_SECRET')
-                        if not self.coinbase_api_password and parsed.get('COINBASE_API_PASSWORD'):
-                            self.coinbase_api_password = parsed.get('COINBASE_API_PASSWORD')
+                        if not self.fmp_api_key and 'FMP_API_KEY' in parsed:
+                            self.fmp_api_key = parsed['FMP_API_KEY']
+                        if not self.coinbase_api_name and 'COINBASE_API_NAME' in parsed:
+                            self.coinbase_api_name = parsed['COINBASE_API_NAME']
+                        if not self.coinbase_api_name and 'COINBASE_API_KEY' in parsed:
+                            self.coinbase_api_name = parsed['COINBASE_API_KEY']
+                        if not self.coinbase_private_key and 'COINBASE_PRIVATE_KEY' in parsed:
+                            self.coinbase_private_key = parsed['COINBASE_PRIVATE_KEY']
+                        if not self.coinbase_private_key and 'COINBASE_API_SECRET' in parsed:
+                            self.coinbase_private_key = parsed['COINBASE_API_SECRET']
+                        if not self.coinbase_api_password and 'COINBASE_API_PASSWORD' in parsed:
+                            self.coinbase_api_password = parsed['COINBASE_API_PASSWORD']
+                        if not self.coinbase_api_password and 'COINBASE_PASSWORD' in parsed:
+                            self.coinbase_api_password = parsed['COINBASE_PASSWORD']
+                        if not self.coinbase_api_password and 'COINBASE_PASSPHRASE' in parsed:
+                            self.coinbase_api_password = parsed['COINBASE_PASSPHRASE']
                     except Exception:
                         # Best-effort parsing only
                         pass

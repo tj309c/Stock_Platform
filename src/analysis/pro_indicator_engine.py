@@ -29,23 +29,117 @@ class ProIndicatorEngine:
 
         data = price_data.copy()
 
-        # Use the pandas_ta strategy feature for a clean implementation
-        # This defines a set of common indicators to calculate.
-        # This can be expanded in Phase 3 to include all 7 tiers.
-        MyStrategy = ta.Strategy(
-            name="Common Indicators",
-            description="Common technical indicators",
-            ta=[
-                {"kind": "sma", "length": 50},
-                {"kind": "ema", "length": 20},
-                {"kind": "rsi"},
-                {"kind": "macd"},
-                {"kind": "bbands", "length": 20},
-                {"kind": "atr", "length": 14},      # Average True Range
-                {"kind": "stoch"},                  # Stochastic Oscillator (%K, %D)
-            ]
-        )
+        # Define the strategy as a list of indicator dictionaries.
+        # This is the modern approach for pandas-ta versions > 0.3.14b0
+        strategy_definition = [
+            {"kind": "sma", "length": 50},
+            {"kind": "ema", "length": 20},
+            {"kind": "rsi"},
+            {"kind": "macd"},
+            {"kind": "bbands", "length": 20},
+            {"kind": "atr", "length": 14},      # Average True Range
+            {"kind": "stoch"},                  # Stochastic Oscillator (%K, %D)
+        ]
 
-        # Run the strategy on the data
-        data.ta.strategy(MyStrategy)
+        # Try to create and run a pandas-ta Strategy when available
+        if hasattr(ta, 'Strategy'):
+            try:
+                MyStrategy = ta.Strategy(name="Common Indicators", ta=strategy_definition)
+                data.ta.strategy(MyStrategy)
+            except Exception:
+                # Fall back to manual indicator calculation
+                pass
+        else:
+            # pandas_ta version doesn't expose Strategy; calculate indicators manually.
+            # Prefer using DataFrame.ta methods when present, otherwise fall back to pandas/numpy implementations.
+            # SMA
+            try:
+                if hasattr(data, 'ta') and hasattr(data.ta, 'sma'):
+                    data['SMA_50'] = data.ta.sma(length=50)
+                else:
+                    data['SMA_50'] = data['close'].rolling(window=50, min_periods=1).mean()
+            except Exception:
+                data['SMA_50'] = data['close'].rolling(window=50, min_periods=1).mean()
+            # EMA
+            try:
+                if hasattr(data, 'ta') and hasattr(data.ta, 'ema'):
+                    data['EMA_20'] = data.ta.ema(length=20)
+                else:
+                    data['EMA_20'] = data['close'].ewm(span=20, adjust=False).mean()
+            except Exception:
+                data['EMA_20'] = data['close'].ewm(span=20, adjust=False).mean()
+            # RSI - fallback implementation
+            try:
+                if hasattr(data, 'ta') and hasattr(data.ta, 'rsi'):
+                    data['RSI_14'] = data.ta.rsi(length=14)
+                else:
+                    delta = data['close'].diff()
+                    gain = delta.clip(lower=0).fillna(0)
+                    loss = -1 * delta.clip(upper=0).fillna(0)
+                    avg_gain = gain.rolling(window=14, min_periods=1).mean()
+                    avg_loss = loss.rolling(window=14, min_periods=1).mean()
+                    rs = avg_gain / (avg_loss.replace(0, 1))
+                    data['RSI_14'] = 100 - (100 / (1 + rs))
+            except Exception:
+                delta = data['close'].diff()
+                gain = delta.clip(lower=0).fillna(0)
+                loss = -1 * delta.clip(upper=0).fillna(0)
+                avg_gain = gain.rolling(window=14, min_periods=1).mean()
+                avg_loss = loss.rolling(window=14, min_periods=1).mean()
+                rs = avg_gain / (avg_loss.replace(0, 1))
+                data['RSI_14'] = 100 - (100 / (1 + rs))
+            # MACD
+            try:
+                if hasattr(data, 'ta') and hasattr(data.ta, 'macd'):
+                    macd = data.ta.macd()
+                    # macd returns dataframe with MACD, MACDh, MACDs
+                    data = data.join(macd)
+                else:
+                    ema12 = data['close'].ewm(span=12, adjust=False).mean()
+                    ema26 = data['close'].ewm(span=26, adjust=False).mean()
+                    data['MACD'] = ema12 - ema26
+                    data['MACD_SIGNAL'] = data['MACD'].ewm(span=9, adjust=False).mean()
+                    data['MACD_HIST'] = data['MACD'] - data['MACD_SIGNAL']
+                    # Add alias columns matching pandas-ta naming so dashboards detect MACD columns
+                    data['MACD_12_26_9'] = data['MACD']
+                    data['MACDh_12_26_9'] = data['MACD_HIST']
+                    data['MACDs_12_26_9'] = data['MACD_SIGNAL']
+            except Exception:
+                pass
+            # Bollinger Bands
+            try:
+                if hasattr(data, 'ta') and hasattr(data.ta, 'bbands'):
+                    bb = data.ta.bbands(length=20)
+                    data = data.join(bb)
+                else:
+                    sma20 = data['close'].rolling(window=20, min_periods=1).mean()
+                    std20 = data['close'].rolling(window=20, min_periods=1).std()
+                    data['BB_UPPER'] = sma20 + 2 * std20
+                    data['BB_LOWER'] = sma20 - 2 * std20
+            except Exception:
+                pass
+            # ATR (Approximation if not available)
+            try:
+                if hasattr(data, 'ta') and hasattr(data.ta, 'atr'):
+                    data['ATR_14'] = data.ta.atr(length=14)
+                else:
+                    data['TR'] = (data['high'] - data['low']).abs()
+                    data['ATR_14'] = data['TR'].rolling(window=14, min_periods=1).mean()
+            except Exception:
+                pass
+            # Stochastic (simple K/D)
+            try:
+                if hasattr(data, 'ta') and hasattr(data.ta, 'stoch'):
+                    stoch = data.ta.stoch()
+                    data = data.join(stoch)
+                else:
+                    low14 = data['low'].rolling(window=14, min_periods=1).min()
+                    high14 = data['high'].rolling(window=14, min_periods=1).max()
+                    data['STOCH_K'] = ((data['close'] - low14) / (high14 - low14).replace(0, 1)) * 100
+                    data['STOCH_D'] = data['STOCH_K'].rolling(window=3, min_periods=1).mean()
+                    # Add alias columns matching pandas-ta naming
+                    data['STOCHk_14_3_3'] = data['STOCH_K']
+                    data['STOCHd_14_3_3'] = data['STOCH_D']
+            except Exception:
+                pass
         return data

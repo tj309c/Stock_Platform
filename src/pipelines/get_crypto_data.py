@@ -47,18 +47,16 @@ class CryptoDataPipeline:
                 }
                 # If we have coinbase credentials in AppConfig and the exchange is coinbase, set them
                 if self.exchange_id.lower() == 'coinbase':
-                    if cfg.coinbase_api_key:
-                        opts['apiKey'] = cfg.coinbase_api_key
-                    # Detect if the secret looks like a Cloud PEM key (COINBASE Cloud JSON key / PEM)
-                    if cfg.coinbase_api_secret:
-                        sec = cfg.coinbase_api_secret
-                        # Many PEMs are pasted with BEGIN/END markers; CCXT expects a plain classic secret.
+                    if cfg.coinbase_api_name:
+                        opts['apiKey'] = cfg.coinbase_api_name
+                    if cfg.coinbase_private_key:
+                        sec = cfg.coinbase_private_key
                         if isinstance(sec, str) and ('BEGIN' in sec and 'PRIVATE KEY' in sec): # type: ignore
                             logging.getLogger(__name__).warning(
-                                "Coinbase secret appears to be a PEM / Cloud key. Skipping adding it to CCXT opts."
+                                "Coinbase private key appears to be a PEM / Cloud key. Skipping adding it to CCXT opts."
                             )
                         else:
-                            opts['secret'] = cfg.coinbase_api_secret
+                            opts['secret'] = cfg.coinbase_private_key
                     if cfg.coinbase_api_password:
                         opts['password'] = cfg.coinbase_api_password
                 self._exchange = exchange_class(opts)
@@ -75,20 +73,20 @@ class CryptoDataPipeline:
         Returns result from the first successful fallback or None.
         """
         for ex_id in fallback_exchanges:
-            logger.debug(f"Attempting fallback fetch on '{ex_id}' for function '{func_name}'")
+            logging.getLogger(__name__).debug("Attempting fallback fetch on '%s' for function '%s'", ex_id, func_name)
             try:
                 ex_class = getattr(ccxt, ex_id)
                 fallback_ex = ex_class({'enableRateLimit': True})
                 func = getattr(fallback_ex, func_name)
                 try:
                     res = func(*args, **kwargs)
-                    logger.info(f"Fallback to '{ex_id}' succeeded for '{func_name}' with args: {args}, kwargs: {kwargs}")
+                    logging.getLogger(__name__).info("Fallback to '%s' succeeded for '%s'", ex_id, func_name)
                     return res
                 except Exception as e_fetch:
-                    logger.debug(f"Fallback fetch from '{ex_id}' failed for function '{func_name}': {e_fetch}")
+                    logging.getLogger(__name__).debug("Fallback fetch from '%s' failed for function '%s': %s", ex_id, func_name, e_fetch)
                     continue
             except Exception as e_init:
-                logger.warning(f"Failed to initialize fallback exchange '{ex_id}': {e_init}")
+                logging.getLogger(__name__).debug("Failed to initialize fallback exchange '%s': %s", ex_id, e_init)
                 continue
         return None
 
@@ -114,10 +112,10 @@ class CryptoDataPipeline:
         try:
             # Fetch OHLCV data
             try:
-                logger.debug(f"Calling primary exchange '{self.exchange_id}' to fetch OHLCV for {symbol}")
+                logger.debug(f"Calling primary exchange '{_self.exchange_id}' to fetch OHLCV for {symbol}")
                 ohlcv = _self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
             except (AuthenticationError, IndexError) as ae:
-                logger.warning(f"Primary exchange '{self.exchange_id}' failed for {symbol}: {repr(ae)}. Attempting public fallbacks.")
+                logger.warning(f"Primary exchange '{_self.exchange_id}' failed for {symbol}: {repr(ae)}. Attempting public fallbacks.")
                 # Fallback to public exchange if initial exchange requires auth or index error
                 fallback_exchanges = ['binance', 'kraken', 'coinbasepro']
                 symbol_variants = [symbol]
@@ -127,7 +125,7 @@ class CryptoDataPipeline:
                 for variant in symbol_variants:
                     logger.debug(f"Attempting fallback fetch for symbol variant '{variant}'")
                     # Correctly call the helper method on the `_self` instance
-                    res = _self._attempt_fallback_fetch(fallback_exchanges, 'fetch_ohlcv', variant, timeframe, limit=limit)
+                    res = CryptoDataPipeline._attempt_fallback_fetch(_self, fallback_exchanges, 'fetch_ohlcv', variant, timeframe, limit=limit)
                     ohlcv = res
                     if ohlcv:
                         st.info(f"Using fallback exchange to fetch ohlcv for {variant}.")
@@ -198,7 +196,7 @@ class CryptoDataPipeline:
                 if '/USD' in symbol and 'USDT' not in symbol:
                     symbol_variants.append(symbol.replace('/USD', '/USDT'))
                 for variant in symbol_variants:
-                    ticker = self._attempt_fallback_fetch(fallback_exchanges, 'fetch_ticker', variant)
+                    ticker = CryptoDataPipeline._attempt_fallback_fetch(_self, fallback_exchanges, 'fetch_ticker', variant)
                     if ticker:
                         st.info(f"Using fallback exchange to fetch ticker for {variant}.")
                         return {
