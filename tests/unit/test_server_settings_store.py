@@ -49,7 +49,7 @@ def test_server_store_get_set(monkeypatch, tmp_path):
     monkeypatch.setattr('requests.post', fake_post)
 
     # set scope config
-    conf = {'weights': {'Finviz': 0.5, 'Yahoo': 0.5, 'MarketWatch': 0.0, 'SEC': 0.0}, 'scoring_mode': 'vader'}
+    conf = {'weights': {'Finviz': 0.5, 'Yahoo': 0.5, 'SEC': 0.0}, 'scoring_mode': 'vader'}
     ok = settings_store.set_scope_config('equity', conf)
     assert ok
     loaded = settings_store.get_scope_config('equity')

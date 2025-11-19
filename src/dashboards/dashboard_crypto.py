@@ -6,6 +6,7 @@ Provides comprehensive crypto analysis with real-time data, charts, and market m
 import streamlit as st
 import textwrap
 import pandas as pd
+import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
@@ -13,7 +14,9 @@ from typing import Dict
 
 from src.pipelines.get_crypto_data import CryptoDataPipeline
 from src.core.design_system import MetricCardRenderer, ThemeManager, HelpWidget
+from src.utils.helpers import format_large_number
 from src.core.wsb_quotes import WSBQuotes, QuoteCategory
+from src.analysis.pro_indicator_engine import ProIndicatorEngine
 
 
 class CryptoDashboard:
@@ -25,6 +28,7 @@ class CryptoDashboard:
     def __init__(self):
         self.name = "Crypto & Digital Assets"
         self.pipeline = CryptoDataPipeline()
+        self.indicator_engine = ProIndicatorEngine()
 
     def display(self):
         """Main display method for the crypto dashboard."""
@@ -46,51 +50,52 @@ class CryptoDashboard:
                 options=popular_pairs,
                 help="Select a popular pair or enter your own (e.g., BTC/USD)"
             )
-
             symbol = symbol_input.strip().upper()
 
-            # Timeframe selector
-            timeframe_options = {
-                "1 Hour": "1h",
-                "4 Hours": "4h",
-                "1 Day": "1d",
-                "1 Week": "1w"
-            }
-            selected_timeframe = st.selectbox(
-                "Timeframe",
-                options=list(timeframe_options.keys()),
-                index=2  # Default to 1 Day
-            )
-            timeframe = timeframe_options[selected_timeframe]
+        # --- Timeframe Selection ---
+        c1, c2 = st.columns(2)
+        with c1:
+            periods = {"90d": "3 Months", "180d": "6 Months", "1y": "1 Year", "max": "Max"}
+            selected_period = st.selectbox("Period", options=list(periods.keys()), format_func=lambda x: periods[x], index=1)
+        with c2:
+            intervals = {"1h": "Hourly", "4h": "4 Hours", "1d": "Daily", "1w": "Weekly"}
+            selected_interval = st.selectbox("Interval", options=list(intervals.keys()), index=2)
 
-            # Number of candles
-            limit_options = {
-                "1 Week": 7,
-                "1 Month": 30,
-                "3 Months": 90,
-                "6 Months": 180,
-                "1 Year": 365
-            }
-            selected_limit = st.selectbox(
-                "Period",
-                options=list(limit_options.keys()),
-                index=2  # Default to 3 Months
-            )
-            limit = limit_options[selected_limit]
+        # Map UI selection to pipeline parameters
+        limit_map = {"90d": 90, "180d": 180, "1y": 365, "max": 1000}
+        limit = limit_map.get(selected_period, 365)
+        timeframe = selected_interval
+
+        # --- Data Fetching (once for all tabs) ---
+        with st.spinner(f"Fetching data for {symbol}..."):
+            ticker_info = self.pipeline.get_ticker_info(symbol)
+            price_data = self.pipeline.get_crypto_price(symbol, timeframe=timeframe, limit=limit)
+            market_info = self.pipeline.get_market_info(symbol)
+            orderbook = self.pipeline.get_orderbook(symbol, limit=20)
+
+            # Standardize column names to lowercase for consistency
+            if price_data is not None:
+                price_data.columns = [col.lower() for col in price_data.columns]
+
+            if price_data is not None and not price_data.empty:
+                indicators_df = self.indicator_engine.calculate_indicators(price_data)
+            else:
+                indicators_df = None
 
         # Create tabs
         tab1, tab2, tab3 = st.tabs(["📊 Summary", "🔬 Deep Dive", "🤖 AI Opinion"])
 
         with tab1:
-            self._render_summary_tab(symbol, timeframe, limit)
+            self._render_summary_tab(symbol, ticker_info, indicators_df, market_info)
 
         with tab2:
-            self._render_deep_dive_tab(symbol, timeframe, limit)
+            # Pass the already fetched data to the deep dive tab
+            self._render_deep_dive_tab(symbol, indicators_df, orderbook, market_info)
 
         with tab3:
             self._render_ai_opinion_tab(symbol)
 
-    def _render_summary_tab(self, symbol: str, timeframe: str, limit: int):
+    def _render_summary_tab(self, symbol: str, ticker_info: Dict, indicators_df: pd.DataFrame, market_info: Dict):
         """Render the Summary tab with key metrics and price chart."""
         st.header(f"{symbol} - Summary")
         HelpWidget.render_help_tooltip("Crypto Dashboard shows on-chain & market metrics and price charts. Expand for more details about the data used here.")
@@ -115,13 +120,7 @@ class CryptoDashboard:
             icon="💭"
         )
 
-        # Fetch current ticker and price data
-        with st.spinner(f"Fetching data for {symbol}..."):
-            ticker_info = self.pipeline.get_ticker_info(symbol)
-            price_data = self.pipeline.get_crypto_price(symbol, timeframe=timeframe, limit=limit)
-            market_info = self.pipeline.get_market_info(symbol)
-
-        if ticker_info is None or price_data is None:
+        if ticker_info is None or indicators_df is None:
             st.error(f"Unable to fetch data for {symbol}. Please try another symbol.")
             return
 
@@ -131,8 +130,8 @@ class CryptoDashboard:
 
         # Calculate price change
         current_price = ticker_info.get('last', 0)
-        if price_data is not None and not price_data.empty:
-            start_price = price_data['Close'].iloc[0]
+        if indicators_df is not None and not indicators_df.empty:
+            start_price = indicators_df['close'].iloc[0]
             price_change = ((current_price - start_price) / start_price) * 100
         else:
             price_change = 0
@@ -141,25 +140,11 @@ class CryptoDashboard:
         st.markdown("---")
         st.subheader("Key Metrics")
 
-        # Calculate 24h metrics from price data (last candle)
-        if price_data is not None and not price_data.empty:
-            latest_candle = price_data.iloc[-1]
-            high_24h = latest_candle['High']
-            low_24h = latest_candle['Low']
-            volume_24h = latest_candle['Volume']
-
-            # Calculate 24h change
-            if len(price_data) >= 2:
-                prev_close = price_data['Close'].iloc[-2]
-                pct_change = ((current_price - prev_close) / prev_close) * 100
-            else:
-                pct_change = price_change
-        else:
-            # Fallback to ticker_info if price_data unavailable
-            high_24h = ticker_info.get('high') or 0
-            low_24h = ticker_info.get('low') or 0
-            volume_24h = ticker_info.get('volume') or 0
-            pct_change = ticker_info.get('percentage') or 0
+        # Always use ticker_info for true 24h metrics to ensure accuracy regardless of selected chart interval.
+        high_24h = ticker_info.get('high') or 0
+        low_24h = ticker_info.get('low') or 0
+        volume_24h = ticker_info.get('volume') or 0
+        pct_change = ticker_info.get('percentage') or 0
 
         metrics = [
             {
@@ -177,7 +162,7 @@ class CryptoDashboard:
             },
             {
                 "label": "24h Volume",
-                "value": self._format_large_number(volume_24h),
+                "value": format_large_number(volume_24h),
             },
             {
                 "label": "24h Change",
@@ -191,9 +176,9 @@ class CryptoDashboard:
         st.markdown("---")
         st.subheader(f"{symbol} Price Chart")
 
-        if price_data is not None and not price_data.empty:
-            fig = self._create_price_chart(symbol, price_data)
-            st.plotly_chart(fig, width='stretch')
+        if indicators_df is not None and not indicators_df.empty:
+            fig = self._create_price_chart(symbol, indicators_df)
+            st.plotly_chart(fig, use_container_width=True)
         else:
             st.warning("No price data available for the selected period.")
 
@@ -234,15 +219,9 @@ class CryptoDashboard:
                     value=f"{taker_fee:.3f}%" if taker_fee else "N/A",
                 )
 
-    def _render_deep_dive_tab(self, symbol: str, timeframe: str, limit: int):
+    def _render_deep_dive_tab(self, symbol: str, indicators_df: pd.DataFrame, orderbook: Dict, market_info: Dict):
         """Render the Deep Dive tab with detailed analysis."""
         st.header(f"{symbol} - Deep Dive Analysis")
-
-        # Fetch detailed data
-        with st.spinner("Fetching detailed data..."):
-            price_data = self.pipeline.get_crypto_price(symbol, timeframe=timeframe, limit=limit)
-            orderbook = self.pipeline.get_orderbook(symbol, limit=20)
-            market_info = self.pipeline.get_market_info(symbol)
 
         # Orderbook Analysis
         st.subheader("Order Book")
@@ -277,21 +256,21 @@ class CryptoDashboard:
         st.markdown("---")
         st.subheader("Technical Analysis")
 
-        if price_data is not None and not price_data.empty:
+        if indicators_df is not None and not indicators_df.empty:
             # Calculate returns and volatility
-            returns_df = self.pipeline.calculate_returns(price_data)
-            volatility_df = self.pipeline.calculate_volatility(price_data)
+            returns_df = self.pipeline.calculate_returns(indicators_df)
+            volatility_df = self.pipeline.calculate_volatility(indicators_df)
 
             # Extract summary statistics
-            total_return = returns_df['Cumulative_Return'].iloc[-1] * 100 if 'Cumulative_Return' in returns_df.columns else 0
+            total_return = returns_df['Cumulative_Return'].iloc[-1] * 100 if not returns_df.empty and 'Cumulative_Return' in returns_df.columns else 0
 
             # Calculate annualized return (365 days for crypto)
             days = len(returns_df)
             years = days / 365  # 365 days for 24/7 crypto markets
-            annualized_return = ((1 + returns_df['Cumulative_Return'].iloc[-1]) ** (1 / years) - 1) * 100 if years > 0 else 0
+            annualized_return = ((1 + returns_df['Cumulative_Return'].iloc[-1]) ** (1 / years) - 1) * 100 if not returns_df.empty and years > 0 else 0
 
             # Get annualized volatility
-            annualized_volatility = volatility_df['Volatility'].iloc[-1] * 100 if 'Volatility' in volatility_df.columns and not volatility_df['Volatility'].isna().all() else 0
+            annualized_volatility = volatility_df['Volatility'].iloc[-1] * 100 if not volatility_df.empty and 'Volatility' in volatility_df.columns and not volatility_df['Volatility'].isna().all() else 0
 
             col1, col2, col3 = st.columns(3)
 
@@ -320,8 +299,8 @@ class CryptoDashboard:
             st.markdown("---")
             st.subheader("Volume Analysis")
 
-            avg_volume = price_data['Volume'].mean()
-            recent_volume = price_data['Volume'].iloc[-1]
+            avg_volume = indicators_df['volume'].mean()
+            recent_volume = indicators_df['volume'].iloc[-1]
             volume_change = ((recent_volume - avg_volume) / avg_volume) * 100
 
             col1, col2 = st.columns(2)
@@ -329,13 +308,13 @@ class CryptoDashboard:
             with col1:
                 MetricCardRenderer.render_metric(
                     label="Average Volume",
-                    value=self._format_large_number(avg_volume),
+                    value=format_large_number(avg_volume),
                 )
 
             with col2:
                 MetricCardRenderer.render_metric(
                     label="Recent Volume",
-                    value=self._format_large_number(recent_volume),
+                    value=format_large_number(recent_volume),
                     delta=f"{volume_change:+.2f}%"
                 )
         else:
@@ -406,38 +385,38 @@ class CryptoDashboard:
             st.markdown("- Fear & Greed Index")
             st.markdown("- Whale wallet activity")
 
-    def _create_price_chart(self, symbol: str, price_data: pd.DataFrame) -> go.Figure:
+    def _create_price_chart(self, symbol: str, indicators_df: pd.DataFrame) -> go.Figure:
         """Create an interactive price chart with volume."""
         # Create figure with secondary y-axis
+        # We'll add subplots for RSI and Stochastic Oscillator
         fig = make_subplots(
-            rows=2, cols=1,
+            rows=5, cols=1,
             shared_xaxes=True,
             vertical_spacing=0.03,
-            subplot_titles=(f'{symbol} Price', 'Volume'),
-            row_heights=[0.7, 0.3]
+            subplot_titles=(f'{symbol} Price', 'Volume', 'RSI', 'Stochastic Oscillator', 'MACD'),
+            row_heights=[0.55, 0.1, 0.1, 0.1, 0.15]
         )
 
         # Add candlestick chart
         fig.add_trace(
             go.Candlestick(
-                x=price_data.index,
-                open=price_data['Open'],
-                high=price_data['High'],
-                low=price_data['Low'],
-                close=price_data['Close'],
+                x=indicators_df.index,
+                open=indicators_df['open'],
+                high=indicators_df['high'],
+                low=indicators_df['low'],
+                close=indicators_df['close'],
                 name='Price'
             ),
             row=1, col=1
         )
 
         # Add volume bars
-        colors = ['red' if price_data['Close'].iloc[i] < price_data['Open'].iloc[i]
-                  else 'green' for i in range(len(price_data))]
+        colors = np.where(indicators_df['close'] >= indicators_df['open'], 'green', 'red')
 
         fig.add_trace(
             go.Bar(
-                x=price_data.index,
-                y=price_data['Volume'],
+                x=indicators_df.index,
+                y=indicators_df['volume'],
                 name='Volume',
                 marker_color=colors,
                 showlegend=False
@@ -445,19 +424,90 @@ class CryptoDashboard:
             row=2, col=1
         )
 
+        # --- Add RSI Indicator ---
+        # Column names from pandas-ta are like 'RSI_14'
+        rsi_col = next((col for col in indicators_df.columns if 'RSI' in col), None)
+        if rsi_col:
+            fig.add_trace(
+                go.Scatter(x=indicators_df.index, y=indicators_df[rsi_col], name='RSI', line=dict(color='cyan', width=1)),
+                row=3, col=1
+            )
+            # Add overbought/oversold lines for RSI
+            fig.add_hline(y=70, line_dash="dash", line_color="red", line_width=1, row=3, col=1)
+            fig.add_hline(y=30, line_dash="dash", line_color="green", line_width=1, row=3, col=1)
+
+        # --- Add Stochastic Oscillator ---
+        # Column names are like 'STOCHk_14_3_3' and 'STOCHd_14_3_3'
+        stoch_k_col = next((col for col in indicators_df.columns if 'STOCHk' in col), None)
+        stoch_d_col = next((col for col in indicators_df.columns if 'STOCHd' in col), None)
+
+        if stoch_k_col and stoch_d_col:
+            fig.add_trace(
+                go.Scatter(x=indicators_df.index, y=indicators_df[stoch_k_col], name='%K', line=dict(color='orange', width=1)),
+                row=4, col=1
+            )
+            fig.add_trace(
+                go.Scatter(x=indicators_df.index, y=indicators_df[stoch_d_col], name='%D', line=dict(color='blue', width=1)),
+                row=4, col=1
+            )
+            # Add overbought/oversold lines for Stochastic
+            fig.add_hline(y=80, line_dash="dash", line_color="red", line_width=1, row=4, col=1)
+            fig.add_hline(y=20, line_dash="dash", line_color="green", line_width=1, row=4, col=1)
+
+        # --- Add MACD Indicator ---
+        macd_col = next((col for col in indicators_df.columns if col.startswith('MACD_')), None)
+        macdh_col = next((col for col in indicators_df.columns if col.startswith('MACDh_')), None) # Histogram
+        macds_col = next((col for col in indicators_df.columns if col.startswith('MACDs_')), None) # Signal
+
+        if macd_col and macdh_col and macds_col:
+            # Histogram bars
+            macd_colors = np.where(indicators_df[macdh_col] < 0, 'red', 'green')
+            fig.add_trace(
+                go.Bar(x=indicators_df.index, y=indicators_df[macdh_col], name='MACD Hist', marker_color=macd_colors),
+                row=5, col=1
+            )
+            # MACD Line
+            fig.add_trace(
+                go.Scatter(x=indicators_df.index, y=indicators_df[macd_col], name='MACD', line=dict(color='blue', width=1)),
+                row=5, col=1
+            )
+            # Signal Line
+            fig.add_trace(
+                go.Scatter(x=indicators_df.index, y=indicators_df[macds_col], name='Signal', line=dict(color='orange', width=1)),
+                row=5, col=1
+            )
+
         # Update layout
         fig.update_layout(
-            title=f'{symbol} Price & Volume',
+            title=f'{symbol} Price & Indicators',
             yaxis_title='Price (USDT)',
             yaxis2_title='Volume',
+            yaxis3_title='RSI',
+            yaxis4_title='Stochastic',
+            yaxis5_title='MACD',
             xaxis_rangeslider_visible=False,
-            height=600,
+            height=900,  # Increase height to accommodate new charts
             hovermode='x unified',
             template='plotly_dark'
         )
 
         # Update axes
-        fig.update_xaxes(title_text="Date", row=2, col=1)
+        fig.update_xaxes(title_text="Date", row=5, col=1)
+
+        # Set ranges for indicator y-axes
+        if rsi_col:
+            fig.update_yaxes(range=[0, 100], row=3, col=1)
+        if stoch_k_col:
+            fig.update_yaxes(range=[0, 100], row=4, col=1)
+
+        # Improve legend
+        fig.update_layout(legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        ))
 
         return fig
 
@@ -537,45 +587,7 @@ class CryptoDashboard:
         html = df_display.to_html(index=False, escape=False, classes='financial-table')
 
         # Apply the same professional styling as financial statements
-        # Build HTML without leading whitespace to avoid Streamlit code block formatting
-        styled_html = (
-            "<style>"
-            ".financial-table { width: 100%; border-collapse: collapse; font-family: Arial, Helvetica, sans-serif; font-size: 0.9rem; margin: 0.5rem 0; }"
-            ".financial-table th, .financial-table td { border: 1px solid #ddd; padding: 8px 10px; }"
-            ".financial-table th { background-color: #f5f5f5; text-align: right; font-weight: 700; }"
-            ".financial-table th:first-child { text-align: left; }"
-            ".financial-table td { text-align: right; }"
-            ".financial-table tr:nth-child(even) { background-color: #fafafa; }"
-            "</style>"
-            f'<div class="table-container">{html}</div>'
-        )
+        # Use centralized styles from the design system
+        styled_html = MetricCardRenderer.get_table_styles() + f'<div class="table-container">{html}</div>'
 
         return styled_html
-
-    @staticmethod
-    def _format_large_number(num) -> str:
-        """Format large numbers with appropriate suffixes (K, M, B, T)."""
-        if num is None:
-            return "N/A"
-
-        if num == 0:
-            return "$0.00"
-
-        try:
-            num = float(num)
-            is_negative = num < 0
-            abs_num = abs(num)
-            sign = "-" if is_negative else ""
-
-            if abs_num >= 1e12:
-                return f"{sign}${abs_num/1e12:.2f}T"
-            elif abs_num >= 1e9:
-                return f"{sign}${abs_num/1e9:.2f}B"
-            elif abs_num >= 1e6:
-                return f"{sign}${abs_num/1e6:.2f}M"
-            elif abs_num >= 1e3:
-                return f"{sign}${abs_num/1e3:.2f}K"
-            else:
-                return f"{sign}${abs_num:.2f}"
-        except (ValueError, TypeError):
-            return "N/A"

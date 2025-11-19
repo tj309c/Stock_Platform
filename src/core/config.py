@@ -1,4 +1,6 @@
 import streamlit as st
+import os
+import logging
 from pathlib import Path
 
 class AppConfig:
@@ -26,6 +28,10 @@ class AppConfig:
     reddit_client_id = None
     reddit_client_secret = None
     reddit_user_agent = None
+    # Optional exchange keys
+    coinbase_api_key = None
+    coinbase_api_secret = None
+    coinbase_api_password = None
     SETTINGS_STORE_TYPE = 'local'
     LLM_SCORING_MODE = 'local'
     REDIS_URL = None
@@ -57,9 +63,84 @@ class AppConfig:
         self.reddit_client_id = st.secrets.get("REDDIT_CLIENT_ID")
         self.reddit_client_secret = st.secrets.get("REDDIT_CLIENT_SECRET")
         self.reddit_user_agent = st.secrets.get("REDDIT_USER_AGENT")
+        # Optional exchange credentials for ccxt (e.g., Coinbase)
+        self.coinbase_api_key = st.secrets.get("COINBASE_API_KEY")
+        self.coinbase_api_secret = st.secrets.get("COINBASE_API_SECRET")
+        self.coinbase_api_password = st.secrets.get("COINBASE_API_PASSWORD")
+        # Optional exchange credentials for ccxt (e.g., Coinbase)
+        self.coinbase_api_key = st.secrets.get("COINBASE_API_KEY")
+        self.coinbase_api_secret = st.secrets.get("COINBASE_API_SECRET")
+        self.coinbase_api_password = st.secrets.get("COINBASE_API_PASSWORD")
         # Settings storage type: 'local' (file) or 'server' (future)
         self.SETTINGS_STORE_TYPE = st.secrets.get("SETTINGS_STORE_TYPE", "local")
         # LLM scoring mode: 'local', 'server', 'server-queue'
         self.LLM_SCORING_MODE = st.secrets.get("LLM_SCORING_MODE", "local")
         # Optional Redis url for queue manager: 'redis://...' or empty
         self.REDIS_URL = st.secrets.get("REDIS_URL")
+        # Debug logging control: set via environment var ANALYSIS_DEBUG (1/true to enable)
+        self.DEBUG_LOGGING = os.getenv('ANALYSIS_DEBUG', '0').lower() in ('1', 'true', 'yes')
+        # Optionally read log level for finer control
+        self.LOG_LEVEL = os.getenv('APP_LOG_LEVEL', 'INFO').upper()
+        if self.DEBUG_LOGGING:
+            try:
+                logging.getLogger().setLevel(logging.DEBUG)
+            except Exception:
+                pass
+        # Module-level debug control: comma separated names (e.g., 'src.pipelines,get_fmp_data')
+        self.DEBUG_MODULES = [m.strip() for m in os.getenv('ANALYSIS_DEBUG_MODULES', '').split(',') if m.strip()]
+        if self.DEBUG_MODULES:
+            for m in self.DEBUG_MODULES:
+                try:
+                    logging.getLogger(m).setLevel(logging.DEBUG)
+                except Exception:
+                    logging.getLogger(__name__).debug("Failed to set debug for module %s", m)
+        # Also apply persisted settings if available (read local settings file directly to avoid importing settings_store and circular imports)
+        try:
+            cfg_file = self.DATA_DIR / 'config' / 'settings.json'
+            if cfg_file.exists():
+                import json
+                pref = json.loads(cfg_file.read_text(encoding='utf-8'))
+                scopes = pref.get('scopes', {})
+                global_scope = scopes.get('global', {})
+                saved_modules = global_scope.get('debug_modules')
+                if saved_modules and isinstance(saved_modules, (list, tuple)):
+                    for m in saved_modules:
+                        if m and m not in self.DEBUG_MODULES:
+                            self.DEBUG_MODULES.append(m)
+                            try:
+                                logging.getLogger(m).setLevel(logging.DEBUG)
+                            except Exception:
+                                logging.getLogger(__name__).debug("Failed to set debug for persisted module %s", m)
+        except Exception:
+            pass
+
+        # If important keys are missing in st.secrets, support a developer fallback that reads 'secrets.toml' from the repository root (local dev only)
+        try:
+            if (not self.fmp_api_key or not self.coinbase_api_key):
+                repo_secrets = self.BASE_DIR.parent / 'secrets.toml'
+                if repo_secrets.exists():
+                    try:
+                        # Read via built-in tomllib for 3.11+, fall back to pypi 'toml' if available
+                        try:
+                            import tomllib as _toml
+                            parsed = _toml.loads(repo_secrets.read_text(encoding='utf-8'))
+                        except Exception:
+                            try:
+                                import toml as _toml
+                                parsed = _toml.loads(repo_secrets.read_text(encoding='utf-8'))
+                            except Exception:
+                                parsed = {}
+                        # Only override missing secrets; prefer st.secrets
+                        if not self.fmp_api_key and parsed.get('FMP_API_KEY'):
+                            self.fmp_api_key = parsed.get('FMP_API_KEY')
+                        if not self.coinbase_api_key and parsed.get('COINBASE_API_KEY'):
+                            self.coinbase_api_key = parsed.get('COINBASE_API_KEY')
+                        if not self.coinbase_api_secret and parsed.get('COINBASE_API_SECRET'):
+                            self.coinbase_api_secret = parsed.get('COINBASE_API_SECRET')
+                        if not self.coinbase_api_password and parsed.get('COINBASE_API_PASSWORD'):
+                            self.coinbase_api_password = parsed.get('COINBASE_API_PASSWORD')
+                    except Exception:
+                        # Best-effort parsing only
+                        pass
+        except Exception:
+            pass

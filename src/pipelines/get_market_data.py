@@ -5,12 +5,19 @@ Provides OHLCV data, fundamentals, options chains, and basic company information
 """
 
 import yfinance as yf
+import logging
 import pandas as pd
 import numpy as np
 from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime, timedelta
 import streamlit as st
+import requests
+from requests.exceptions import RequestException
+import json
+from json import JSONDecodeError
+from src.utils.helpers import retry_on_exception
 from src.core.cache_manager import CacheManager
+from src.core.config import AppConfig
 
 
 class MarketDataPipeline:
@@ -103,27 +110,56 @@ class MarketDataPipeline:
     @CacheManager.cache_fundamentals
     def get_company_info(_self, ticker: str) -> Optional[Dict[str, Any]]:
         """
-        Get basic company information and metadata.
-
-        Args:
-            ticker: Stock ticker symbol
-
-        Returns:
-            Dictionary with company info or None
+        Attempts to get company info via yfinance and falls back to FMP if Yahoo returns a non-JSON response
+        or other transient errors occur. The yfinance call is retried with exponential backoff.
         """
+        # Inner function that performs the actual yfinance fetch. It's decorated with the retry decorator
+        # so transient errors like JSONDecodeError and RequestException will be retried.
+        @retry_on_exception(exceptions=(JSONDecodeError, RequestException, ValueError), tries=3, delay=1.0, backoff=2.0)
+        def _fetch_yf_info(local_ticker: str):
+            stock = yf.Ticker(local_ticker)
+            # Accessing .info may raise JSONDecodeError on malformed responses
+            try:
+                return stock.info
+            except JSONDecodeError as jde:
+                logger = logging.getLogger(__name__)
+                logger.debug("yfinance JSONDecodeError for %s: %s", local_ticker, jde)
+                raise
+
         try:
-            stock = yf.Ticker(ticker)
-            info = stock.info
-
-            if not info or len(info) == 0:
-                st.warning(f"No company info found for ticker: {ticker}")
-                return None
-
-            return info
-
-        except Exception as e:
+            info = _fetch_yf_info(ticker)
+        except (JSONDecodeError, RequestException, ValueError) as e:
+            # Final failure after retries — attempt to fallback to FMP if configured
+            logger = getattr(__import__('logging'), 'getLogger')(__name__)
+            logger.debug("Final failure fetching using yfinance for %s: %s", ticker, e)
+            if AppConfig().fmp_api_key:
+                from src.pipelines.get_fmp_data import FMPDataPipeline
+                fmp = FMPDataPipeline()
+                profile = fmp.get_company_profile(ticker)
+                if profile:
+                    return profile
+            # Show user-facing error only on final failure
             st.error(f"Error fetching company info for {ticker}: {str(e)}")
             return None
+
+        # If retries were suppressed by the decorator, _fetch_yf_info may return None.
+        if info is None:
+            # Attempt fallback to FMP if configured
+            if AppConfig().fmp_api_key:
+                from src.pipelines.get_fmp_data import FMPDataPipeline
+                fmp = FMPDataPipeline()
+                profile = fmp.get_company_profile(ticker)
+                if profile:
+                    return profile
+            st.error(f"Error fetching company info for {ticker}: yfinance failed and no fallback available.")
+            return None
+
+        if not info or len(info) == 0:
+            st.warning(f"No company info found for ticker: {ticker}")
+            return None
+
+        return info
+
 
     @CacheManager.cache_fundamentals
     def get_financials(_self, ticker: str) -> Optional[Dict[str, pd.DataFrame]]:

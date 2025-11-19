@@ -308,10 +308,11 @@ class SentimentScraper:
     def get_sentiment_for_ticker(_self, ticker: str) -> Dict:
         """
         Main public method to get an aggregated sentiment score for a ticker.
+        Reloads configuration to ensure latest weights and settings are used.
         """
-        _self._load_config() # Reload config in case settings changed
+        _self._load_config()  # Reload config in case settings changed
         # If an extension or test has patched a simplified inline gatherer, prefer it
-        if hasattr(_self, '_gather_headlines'):
+        if hasattr(_self, '_gather_headlines') and callable(getattr(_self, '_gather_headlines', None)):
             try:
                 headlines = _self._gather_headlines(ticker, None)
                 # If using the patched _gather_headlines, synthesize OK statuses per source

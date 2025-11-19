@@ -3,7 +3,7 @@ from src.server import settings_server
 
 def test_status_sources_endpoint(monkeypatch):
     # Monkeypatch SentimentScraper.get_headlines_with_status to return predictable output
-    fake_status = ({}, {'Finviz': {'state': 'ok', 'last_success': '2025-01-01T00:00:00', 'last_error': None}, 'MarketWatch': {'state': 'no_data', 'last_success': None, 'last_error': None}})
+    fake_status = ({}, {'Finviz': {'state': 'ok', 'last_success': '2025-01-01T00:00:00', 'last_error': None}})
     class FakeSS:
         def get_headlines_with_status(self, ticker):
             return fake_status

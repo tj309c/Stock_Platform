@@ -8,9 +8,12 @@ import ccxt
 import pandas as pd
 import numpy as np
 from typing import Optional, Dict, Any, List
+from ccxt.base.errors import AuthenticationError
 from datetime import datetime, timedelta
 import streamlit as st
 from src.core.cache_manager import CacheManager
+from src.core.config import AppConfig
+import logging
 
 
 class CryptoDataPipeline:
@@ -35,13 +38,24 @@ class CryptoDataPipeline:
         if self._exchange is None:
             try:
                 exchange_class = getattr(ccxt, self.exchange_id)
-                self._exchange = exchange_class({
+                cfg = AppConfig()
+                opts = {
                     'enableRateLimit': True,
                     'timeout': 30000,
-                })
+                }
+                # If we have coinbase credentials in AppConfig and the exchange is coinbase, set them
+                if self.exchange_id.lower() == 'coinbase':
+                    if cfg.coinbase_api_key:
+                        opts['apiKey'] = cfg.coinbase_api_key
+                    if cfg.coinbase_api_secret:
+                        opts['secret'] = cfg.coinbase_api_secret
+                    if cfg.coinbase_api_password:
+                        opts['password'] = cfg.coinbase_api_password
+                self._exchange = exchange_class(opts)
             except Exception as e:
                 st.error(f"Error connecting to {self.exchange_id}: {str(e)}")
                 # Fallback to coinbase
+                logging.getLogger(__name__).debug("Falling back to coinbase without credentials: %s", e)
                 self._exchange = ccxt.coinbase({'enableRateLimit': True})
         return self._exchange
 
@@ -65,7 +79,31 @@ class CryptoDataPipeline:
         """
         try:
             # Fetch OHLCV data
-            ohlcv = _self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
+            try:
+                ohlcv = _self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
+            except AuthenticationError as ae:
+                # Fallback to public exchange if initial exchange requires auth
+                fallback_exchanges = ['binance', 'kraken', 'coinbasepro']
+                symbol_variants = [symbol]
+                if '/USD' in symbol and 'USDT' not in symbol:
+                    symbol_variants.append(symbol.replace('/USD', '/USDT'))
+                ohlcv = None
+                for ex_id in fallback_exchanges:
+                    try:
+                        ex_class = getattr(ccxt, ex_id)
+                        fallback_ex = ex_class({'enableRateLimit': True})
+                        for variant in symbol_variants:
+                            try:
+                                ohlcv = fallback_ex.fetch_ohlcv(variant, timeframe, limit=limit)
+                                st.info(f"Using {ex_id} as fallback to fetch ohlcv for {variant}.")
+                                symbol = variant
+                                break
+                            except Exception:
+                                continue
+                        if ohlcv:
+                            break
+                    except Exception:
+                        continue
 
             if not ohlcv:
                 st.warning(f"No data found for {symbol}")
@@ -118,7 +156,45 @@ class CryptoDataPipeline:
             Dictionary with ticker info or None
         """
         try:
-            ticker = _self.exchange.fetch_ticker(symbol)
+            try:
+                ticker = _self.exchange.fetch_ticker(symbol)
+            except AuthenticationError as ae:
+                # Authentication errors from ccxt can indicate that the exchange requires API credentials
+                msg = str(ae)
+                st.error(f"Authentication error fetching ticker for {symbol}: {msg}")
+                st.info("If you are using Coinbase (or another exchange with authentication-required endpoints), add COINBASE_API_KEY/COINBASE_API_SECRET to `.streamlit/secrets.toml` or set the keys in the environment.")
+                # Attempt to fallback to public exchange to fetch ticker. Try common public exchanges and symbol variants.
+                fallback_exchanges = ['binance', 'kraken', 'coinbasepro']
+                symbol_variants = [symbol]
+                if '/USD' in symbol and 'USDT' not in symbol:
+                    symbol_variants.append(symbol.replace('/USD', '/USDT'))
+                for ex_id in fallback_exchanges:
+                    try:
+                        ex_class = getattr(ccxt, ex_id)
+                        fallback_ex = ex_class({'enableRateLimit': True})
+                        for variant in symbol_variants:
+                            try:
+                                ticker = fallback_ex.fetch_ticker(variant)
+                                st.info(f"Using {ex_id} as fallback to fetch ticker for {variant}.")
+                                return {
+                                    'symbol': ticker.get('symbol'),
+                                    'last': ticker.get('last'),
+                                    'bid': ticker.get('bid'),
+                                    'ask': ticker.get('ask'),
+                                    'high': ticker.get('high'),
+                                    'low': ticker.get('low'),
+                                    'volume': ticker.get('quoteVolume'),
+                                    'base_volume': ticker.get('baseVolume'),
+                                    'change': ticker.get('change'),
+                                    'percentage': ticker.get('percentage'),
+                                    'timestamp': ticker.get('timestamp'),
+                                    'datetime': ticker.get('datetime'),
+                                }
+                            except Exception:
+                                continue
+                    except Exception:
+                        continue
+                return None
 
             return {
                 'symbol': ticker.get('symbol'),
@@ -136,7 +212,12 @@ class CryptoDataPipeline:
             }
 
         except Exception as e:
-            st.error(f"Error fetching ticker info for {symbol}: {str(e)}")
+            # Enhance error message for coinbase auth specifically
+            text = str(e)
+            if 'apiKey' in text or 'API Key' in text or 'requires "apiKey"' in text:
+                st.error(f"Coinbase requires API credentials to access this data. Please add COINBASE_API_KEY/COINBASE_API_SECRET to `.streamlit/secrets.toml` or set the keys as environment variables.")
+            else:
+                st.error(f"Error fetching ticker info for {symbol}: {text}")
             return None
 
     @CacheManager.cache_market_data

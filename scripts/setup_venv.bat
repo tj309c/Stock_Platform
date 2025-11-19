@@ -3,7 +3,7 @@ REM scripts/setup_venv.bat - Create .venv and install runtime and dev requiremen
 
 cd %~dp0\..
 if not exist .venv (
-    python -m venv .venv
+    py -3.12 -m venv .venv
 )
 call .venv\Scripts\activate
 python -m pip install --upgrade pip wheel

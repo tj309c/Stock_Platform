@@ -75,3 +75,24 @@ def test_fmp_api_error(mock_get, fmp_pipeline):
     """Test handling of an API error message from FMP."""
     profile = fmp_pipeline.get_company_profile("ERROR")
     assert profile is None
+
+
+@patch('requests.get')
+def test_get_key_metrics_retry(mock_get, fmp_pipeline):
+    """Test that key metrics uses retry on transient errors and succeeds on retry."""
+    # First call raises a transient exception, second call returns valid data
+    from requests.exceptions import Timeout
+    def side_effect(*args, **kwargs):
+        # Raise Timeout on first call, then return a good response
+        if not hasattr(side_effect, 'count'):
+            side_effect.count = 0
+        if side_effect.count == 0:
+            side_effect.count += 1
+            raise Timeout('timeout')
+        return mock_requests_get(*args, **kwargs)
+
+    mock_get.side_effect = side_effect
+
+    metrics = fmp_pipeline.get_key_metrics("AAPL")
+    assert metrics is not None
+    assert metrics[0]['peRatio'] == 25.0

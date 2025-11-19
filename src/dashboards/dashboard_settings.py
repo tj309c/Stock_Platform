@@ -59,7 +59,8 @@ class SettingsDashboard:
             with cols[i]:
                 w = st.slider(f"{src}", 0.0, 1.0, float(cur_weights.get(src, DEFAULT_SOURCE_WEIGHTS[src])), 0.05)
                 new_weights[src] = float(w)
-                rl = st.number_input(f"{src} rate limit (s)", min_value=0.0, max_value=60.0, value=float(scope_conf.get('rate_limits', {}).get(src, 0.2 if src=='MarketWatch' else 0.05)), step=0.01)
+                # For historic MarketWatch config the prior default rate limit was 0.2, now defaults to 0.05
+                rl = st.number_input(f"{src} rate limit (s)", min_value=0.0, max_value=60.0, value=float(scope_conf.get('rate_limits', {}).get(src, 0.05)), step=0.01)
                 new_rate_limits[src] = float(rl)
             # enable toggle for this source
             new_enabled[src] = st.checkbox(f"Enable {src}", value=bool(enabled_sources.get(src, True)))
@@ -118,7 +119,69 @@ class SettingsDashboard:
                 self.sentiment.clear_cache()
                 st.experimental_rerun()
 
+        # Add a debug logging toggle for the session (useful for developers)
+        debug_toggle = st.checkbox("Enable detailed debug logs (session only)")
+        if debug_toggle:
+            import logging
+            logging.getLogger().setLevel(logging.DEBUG)
+            st.success("Debug logging enabled (session only). Check logs for detail.")
+        else:
+            # If not toggled and AppConfig says debug is enabled, keep it; otherwise, set to INFO
+            from src.core.config import AppConfig
+            try:
+                if not AppConfig().DEBUG_LOGGING:
+                    import logging
+                    logging.getLogger().setLevel(logging.INFO)
+            except Exception:
+                pass
+
         st.markdown("---")
+        # Module-level debug control: allow developers to specify module loggers
+        # Default comes from saved config (scope_conf) or env var ANALYSIS_DEBUG_MODULES
+        module_debug_default = ''
+        if isinstance(scope_conf.get('debug_modules', None), (list, tuple)):
+            module_debug_default = ','.join(scope_conf.get('debug_modules', []))
+        elif scope_conf.get('debug_modules'):
+            module_debug_default = str(scope_conf.get('debug_modules'))
+        if not module_debug_default:
+            module_debug_default = ','.join([m for m in __import__('os').getenv('ANALYSIS_DEBUG_MODULES', '').split(',') if m.strip()])
+        st.text('Module-level debug loggers: toggle specific modules to DEBUG for the session or persist them in settings')
+        module_debug_input = st.text_input("Module-level debug loggers (comma-separated)", value=module_debug_default, help="Enter module names (e.g., 'src.pipelines.get_fmp_data,src.pipelines.get_market_data') to set those loggers to DEBUG level for this session.")
+        st.caption("Tip: set ANALYSIS_DEBUG_MODULES env var for a system-wide default, or persist below for the selected scope.")
+        col_apply, col_save, col_clear = st.columns(3)
+        with col_apply:
+            if st.button('Apply module debuggers'):
+                modules = [m.strip() for m in module_debug_input.split(',') if m.strip()]
+                import logging
+                for m in modules:
+                    logging.getLogger(m).setLevel(logging.DEBUG)
+                st.success('Applied module debug settings for this session')
+        with col_save:
+            if st.button('Save module debuggers (persist)'):
+                try:
+                    mods = [m.strip() for m in module_debug_input.split(',') if m.strip()]
+                    conf = get_scope_config(scope) or {}
+                    conf['debug_modules'] = mods
+                    if set_scope_config(scope, conf):
+                        st.success('Saved module debuggers to settings')
+                    else:
+                        st.error('Failed to save module debuggers to settings')
+                except Exception as e:
+                    st.error(f'Failed to save module debuggers: {e}')
+        with col_clear:
+            if st.button('Clear persisted module debuggers'):
+                try:
+                    conf = get_scope_config(scope) or {}
+                    if 'debug_modules' in conf:
+                        conf.pop('debug_modules', None)
+                        if set_scope_config(scope, conf):
+                            st.success('Cleared persisted module debuggers')
+                        else:
+                            st.error('Failed to clear persisted module debuggers')
+                    else:
+                        st.info('No persisted module debuggers found')
+                except Exception as e:
+                    st.error(f'Failed to clear persisted module debuggers: {e}')
         st.subheader("Preview")
         preview_col1, preview_col2 = st.columns([2, 3])
         with preview_col1:
@@ -132,8 +195,40 @@ class SettingsDashboard:
             try:
                 headlines = self.sentiment.get_headlines('AAPL')
                 # compute per-source scores
-                agg = self.sentiment._aggregate_scores(headlines, source_weights=new_weights)
-                per_source = agg['per_source']
+                if not headlines:
+                    st.info('No headlines available to compute contributions. Use a ticker with recent news or check your network.')
+                    st.markdown('**Current per-source weights**')
+                    st.table(cur_weights)
+                    st.markdown('**Preview weights (unsaved)**')
+                    st.table(new_weights)
+                # Add a button for exploring the settings file used by the app
+                if st.button("Show settings file path"):
+                    try:
+                        from src.core.settings_store import _settings_file_path
+                        p = _settings_file_path()
+                        st.write(f"Settings file: {p}")
+                        import json
+                        if p.exists():
+                            st.json(json.loads(p.read_text(encoding='utf-8')))
+                        else:
+                            st.write("Settings file not found (using defaults)")
+                    except Exception as e:
+                        st.write("Error showing settings file:", e)
+                if st.button('Download settings file'):
+                    try:
+                        from src.core.settings_store import _settings_file_path
+                        p = _settings_file_path()
+                        import json
+                        if p.exists():
+                            content = p.read_text(encoding='utf-8')
+                        else:
+                            content = json.dumps(load_settings(), indent=2)
+                        st.download_button("Download settings JSON", data=content, file_name="settings.json", mime="application/json")
+                    except Exception as e:
+                        st.write('Error preparing download:', e)
+                else:
+                    agg = self.sentiment._aggregate_scores(headlines, source_weights=new_weights)
+                    per_source = agg['per_source']
                 # compute contributions as weight * score
                 contributions = {src: (per_source.get(src, {}).get('score', 0.0) * new_weights.get(src, 0.0)) for src in new_weights}
                 # Show table
@@ -146,7 +241,7 @@ class SettingsDashboard:
         # Allow user to pick a ticker for the preview and a resolution
         preview_ticker = st.text_input('Ticker for heatmap preview', 'AAPL')
         steps = st.slider('Resolution (larger = slower)', min_value=3, max_value=11, value=5)
-        # Create heatmap by sweeping two source weights (Finviz vs MarketWatch) and distributing remainder
+        # Create heatmap by sweeping two source weights and distributing remainder among the rest
         try:
             headlines = self.sentiment.get_headlines(preview_ticker)
             if not headlines:
@@ -163,16 +258,19 @@ class SettingsDashboard:
                     for wm in values:
                         # remaining weight is split across other sources
                         rem = max(0.0, 1.0 - wf)
-                        wy = rem
-                        weights = {
-                            'Finviz': wf,
-                            'Yahoo': wy,
-                            'SEC': wsec
-                        }
+                        # distribute remainder equally across other sources
+                        other = [s for s in DEFAULT_SOURCE_WEIGHTS.keys() if s != 'Finviz']
+                        if other:
+                            distribute = rem / len(other)
+                        else:
+                            distribute = 0.0
+                        weights = { 'Finviz': wf }
+                        for s in other:
+                            weights[s] = distribute
                         agg = self.sentiment._aggregate_scores(headlines, source_weights=weights)
                         row.append(agg['overall'])
                     z.append(row)
-                fig = px.imshow(z, x=[f'{v:.2f}' for v in values], y=[f'{v:.2f}' for v in values], labels={'x': 'MarketWatch weight', 'y': 'Finviz weight'}, origin='lower', aspect='auto', color_continuous_scale='RdYlGn')
+                fig = px.imshow(z, x=[f'{v:.2f}' for v in values], y=[f'{v:.2f}' for v in values], labels={'x': 'Other sources weight', 'y': 'Finviz weight'}, origin='lower', aspect='auto', color_continuous_scale='RdYlGn')
                 st.plotly_chart(fig, width='stretch')
         except Exception as e:
             st.write('Unable to render heatmap', e)

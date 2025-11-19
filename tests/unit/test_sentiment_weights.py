@@ -3,6 +3,12 @@ from src.pipelines.get_sentiment_scraper import SentimentScraper, DEFAULT_SOURCE
 
 def test_weighting_influence(monkeypatch):
     s = SentimentScraper()
+    # Ensure we start from the default persisted weights for this test (explicitly set defaults to be safe)
+    from src.pipelines.get_sentiment_scraper import DEFAULT_SOURCE_WEIGHTS
+    s.set_weights(DEFAULT_SOURCE_WEIGHTS)
+    # Debug: print persisted settings for this test environment
+    from src.core.settings_store import load_settings, get_scope_weights
+    # Debug logs removed
     # MarketWatch is removed, so we'll use Yahoo as the negative source
     headlines = [
         {'source': 'Finviz', 'title': 'Company beats expectations'},
@@ -93,6 +99,9 @@ def test_saving_weights_changes_reported_sentiment(tmp_path, monkeypatch):
     monkeypatch.setattr(AppConfig, 'DATA_DIR', tmp_path)
     monkeypatch.setattr(AppConfig, 'CACHE_DIR', tmp_path / 'cache')
     s = SentimentScraper()
+    from src.pipelines.get_sentiment_scraper import DEFAULT_SOURCE_WEIGHTS
+    # Enforce default weights for isolation from persisted files
+    s.set_weights(DEFAULT_SOURCE_WEIGHTS)
     # Monkeypatch the gather headlines to return a fixed set of headlines
     def fake_gather_with_status(self, ticker, sources=None):
         headlines = [
@@ -103,8 +112,10 @@ def test_saving_weights_changes_reported_sentiment(tmp_path, monkeypatch):
     monkeypatch.setattr(SentimentScraper, '_gather_headlines_with_status', fake_gather_with_status)
 
     # Begin with defaults
+    # Removed temporary debug printing
     res1 = s.get_sentiment_for_ticker('AAPL')
     default_score = res1['score']
+    # debug: should be default weights before setting custom weights
 
     # Save weights favoring Finviz strongly
     weights = {'Finviz': 1.0, 'Yahoo': 0.0, 'SEC': 0.0} # noqa

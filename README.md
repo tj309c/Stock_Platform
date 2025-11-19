@@ -455,7 +455,30 @@ See requirements.txt for full dependencies. The core stack includes streamlit, p
 
 1. Prerequisites
 
-Python 3.10 or 3.11
+Python 3.12 is recommended (the repo setup scripts are tuned for 3.12), but Python 3.10/3.11 may work for most features.
+
+Environment checklist (recommended)
+
+- Create and activate a virtual environment using Python 3.12. On Windows, the supplied helper does this automatically:
+
+```powershell
+py -3.12 -m venv .venv
+.venv\Scripts\activate
+```
+
+- Or run the helper script (Windows):
+
+```powershell
+scripts\setup_venv.bat
+```
+
+- After packages are installed, run the environment checklist to validate your environment (cross-platform):
+
+```powershell
+python scripts/check_environment.py
+```
+
+The script will verify your Python version, venv activation, critical packages (`yfinance`, `pandas`, `numpy`, `requests`, `streamlit`) and whether a `FMP_API_KEY` is configured.
 
 2. Install Dependencies
 
@@ -494,6 +517,39 @@ FMP_API_KEY = "your_fmp_api_key_here"
 ALPHA_VANTAGE_KEY = "your_av_key"
 FRED_API_KEY = "your_fred_key"
 EIA_API_KEY = "your_eia_key"
+
+Note: Streamlit loads secrets from `.streamlit/secrets.toml`. If you keep your credentials in a `secrets.toml` at the repository root (not in `.streamlit`), they won't be picked up by Streamlit. Move the file to `.streamlit/secrets.toml` or export keys as environment variables.
+
+Coinbase (CCXT) Credentials
+--------------------------------
+If you want to use private, authenticated Coinbase endpoints (e.g., detailed orderbooks or account-specific endpoints), provide credentials in `.streamlit/secrets.toml` as follows:
+
+```toml
+COINBASE_API_KEY = "your_coinbase_api_key"
+COINBASE_API_SECRET = "your_coinbase_api_secret"
+COINBASE_API_PASSWORD = "your_coinbase_password"  # if required
+
+Developer note: A helper script is available to help migrate a repo-root `secrets.toml` to `.streamlit/secrets.toml`.
+Usage:
+```powershell
+python scripts/migrate_repo_secrets_to_dotstreamlit.py
+python scripts/migrate_repo_secrets_to_dotstreamlit.py --force  # overwrite if exists
+```
+COINBASE_API_SECRET = "your_coinbase_api_secret"
+COINBASE_API_PASSWORD = "your_coinbase_password"  # if required
+ 
+Important notes & troubleshooting:
+- Coinbase Cloud keys (often starting with `organizations/...`) are not the same as "classic" API keys — CCXT may not support organization-style keys for authenticated access. If you see 401 Unauthorized errors or `coinbasepro` returns 503s, consider creating a **classic API key+secret+passphrase** for CCXT, or use the official Coinbase Cloud SDK if you must use organization keys.
+- If you paste a multi-line PEM into `COINBASE_API_SECRET`, make sure to use triple-quoted TOML strings to avoid parsing errors, or use the helper script `scripts/convert_pem_secret_to_toml.py` to automatically convert it to a TOML multiline block.
+
+How to create a classic Coinbase API key (manual/UI steps):
+1. Go to your Coinbase account -> *Settings* -> *API*.
+2. Click *New API Key* and add the required permissions (e.g. `view`, `trade`) and set an IP restriction if desired.
+3. Save the passphrase (password) and API secret. Record the API key, secret, and passphrase in your `.streamlit/secrets.toml` as shown above.
+4. If you cannot create a classic API key because your account is organization-scoped, create a dedicated API key with classic access or use the Coinbase Cloud SDK as required.
+```
+
+Those keys are optional for public endpoints (tickers/ohlcv), but necessary for private functionality.
 
 
 5. Run the Dashboard

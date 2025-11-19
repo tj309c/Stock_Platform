@@ -11,7 +11,7 @@ IF NOT EXIST "%VENV_PY%" (
 )
 
 echo Using Python: %VENV_PY%
-%VENV_PY% -c "import sys, os; print('Python:', sys.version); import numpy, pandas; print('numpy', numpy.__version__); print('pandas', pandas.__version__)"
+%VENV_PY% scripts\check_environment.py
 IF %ERRORLEVEL% NEQ 0 (
     echo One or more package imports failed. Try reinstalling numpy/pandas:
     echo %VENV_PY% -m pip install --upgrade --force-reinstall --no-cache-dir numpy pandas

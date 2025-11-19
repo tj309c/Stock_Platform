@@ -11,13 +11,13 @@ def test_set_get_reset_scope_weights(tmp_path, monkeypatch):
     settings = load_settings()
     assert isinstance(settings, dict)
 
-    weights_global = {'Finviz': 0.4, 'Yahoo': 0.4, 'MarketWatch': 0.1, 'SEC': 0.1}
+    weights_global = {'Finviz': 0.4, 'Yahoo': 0.4, 'SEC': 0.2}
     assert set_scope_weights('global', weights_global)
-    got = get_scope_weights('global', {'Finviz': 0.25, 'Yahoo': 0.25, 'MarketWatch': 0.25, 'SEC': 0.25})
+    got = get_scope_weights('global', {'Finviz': 0.25, 'Yahoo': 0.25, 'SEC': 0.25})
     assert got['Finviz'] == weights_global['Finviz']
 
     # Set a specific scope (equity)
-    weights_eq = {'Finviz': 0.6, 'Yahoo': 0.2, 'MarketWatch': 0.1, 'SEC': 0.1}
+    weights_eq = {'Finviz': 0.6, 'Yahoo': 0.2, 'SEC': 0.2}
     assert set_scope_weights('equity', weights_eq)
     got_eq = get_scope_weights('equity', weights_global)
     assert got_eq['Finviz'] == weights_eq['Finviz']
