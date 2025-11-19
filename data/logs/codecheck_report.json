@@ -1,0 +1,824 @@
+{
+  "root": "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform",
+  "python_files": 108,
+  "syntax_errors": [],
+  "import_tree": {
+    "imports": {
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\dashboard_selector.py": [
+        "streamlit"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\main.py": [
+        "streamlit"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\check_imports.py": [
+        "os",
+        "src",
+        "sys"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\compile_project.py": [
+        "py_compile",
+        "sys"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\compute_effective_exponent.py": [
+        "math"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\debug_dcf_conventions.py": [
+        "math"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\debug_numpy_import.py": [
+        "numpy",
+        "os",
+        "sys",
+        "traceback"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\debug_run_worker_once.py": [
+        "os",
+        "src",
+        "sys",
+        "tempfile"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\debug_weight_test.py": [
+        "pprint",
+        "sys"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\delete_reserved_nul.py": [
+        "os"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\download_nltk_data.py": [
+        "nltk"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\export_project_state.py": [
+        "os",
+        "zipfile"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\git_prepush_check.py": [
+        "os",
+        "subprocess",
+        "sys"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\growth_profile_test.py": [
+        "sys"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\list_rootnames.py": [
+        "os"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\migrate_settings_to_server.py": [
+        "argparse",
+        "json",
+        "requests"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\remove_reserved_files.py": [
+        "os"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\run_all_tests_no_playwright.py": [
+        "os",
+        "pytest",
+        "sys"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\run_code_check.py": [
+        "argparse",
+        "ast",
+        "json",
+        "os",
+        "re",
+        "subprocess",
+        "sys",
+        "traceback"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\run_llm_worker.py": [
+        "argparse",
+        "logging",
+        "os",
+        "sys"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\run_selected_tests_no_playwright.py": [
+        "os",
+        "pytest",
+        "sys"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\run_worker_tests_no_playwright.py": [
+        "os",
+        "pytest",
+        "sys"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\test_scrapers.py": [
+        "json",
+        "os",
+        "sys"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\analysis\\interactive_dcf.py": [
+        "pandas",
+        "plotly",
+        "streamlit"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\analysis\\valuation_models.py": [
+        "math"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\core\\config.py": [
+        "streamlit"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\core\\design_system.py": [
+        "math",
+        "streamlit"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\core\\queue_manager.py": [
+        "json",
+        "logging",
+        "redis",
+        "uuid"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\core\\settings_store.py": [
+        "json",
+        "logging",
+        "os",
+        "re",
+        "requests",
+        "tempfile"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\core\\wsb_quotes.py": [
+        "random"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\dashboards\\dashboard_crypto.py": [
+        "pandas",
+        "plotly",
+        "streamlit",
+        "textwrap"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\dashboards\\dashboard_debug.py": [
+        "pandas",
+        "streamlit"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\dashboards\\dashboard_equity.py": [
+        "pandas",
+        "streamlit"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\dashboards\\dashboard_options.py": [
+        "numpy",
+        "pandas",
+        "plotly",
+        "streamlit"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\dashboards\\dashboard_portfolio.py": [
+        "numpy",
+        "pandas",
+        "plotly",
+        "streamlit"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\dashboards\\dashboard_predictive.py": [
+        "pandas",
+        "plotly",
+        "streamlit"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\dashboards\\dashboard_selector.py": [
+        "streamlit"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\dashboards\\dashboard_settings.py": [
+        "numpy",
+        "plotly",
+        "streamlit"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\pipelines\\get_crypto_data.py": [
+        "ccxt",
+        "numpy",
+        "pandas",
+        "streamlit"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\pipelines\\get_economic_data.py": [
+        "requests",
+        "streamlit"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\pipelines\\get_fmp_data.py": [
+        "requests",
+        "streamlit"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\pipelines\\get_market_data.py": [
+        "numpy",
+        "pandas",
+        "streamlit",
+        "yfinance"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\pipelines\\get_political_data.py": [
+        "logging",
+        "requests"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\pipelines\\get_sec_rss_feeds.py": [
+        "logging",
+        "pandas",
+        "requests"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\pipelines\\get_sentiment_scraper.py": [
+        "logging",
+        "nltk",
+        "pandas",
+        "requests",
+        "streamlit",
+        "time"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\pipelines\\llm_scoring.py": [
+        "json",
+        "logging",
+        "openai",
+        "re",
+        "requests",
+        "time"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\server\\llm_worker.py": [
+        "logging",
+        "src",
+        "time"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\server\\settings_server.py": [
+        "json",
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\conftest.py": [
+        "importlib",
+        "openai",
+        "pandas",
+        "sys",
+        "types"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\e2e\\test_settings_flow.py": [
+        "pytest"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\e2e\\test_snapshot.py": [
+        "os"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_get_economic_data.py": [
+        "pytest"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_get_fmp_data.py": [
+        "pytest"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_get_political_data.py": [
+        "pytest",
+        "requests"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_get_sec_rss_feeds.py": [
+        "pytest",
+        "requests"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_get_sec_rss_feeds_clean.py": [
+        "pytest",
+        "requests"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_interactive_dcf.py": [
+        "importlib",
+        "pytest",
+        "src",
+        "sys"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_llm_batching.py": [
+        "pytest"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_llm_integration.py": [
+        "pytest",
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_llm_scoring_mode.py": [
+        "pytest",
+        "requests"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_llm_scoring_server_queue.py": [
+        "json",
+        "requests",
+        "streamlit",
+        "types"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_llm_worker.py": [
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_queue_manager.py": [
+        "pytest"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_sentiment_scoring.py": [
+        "pytest"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_sentiment_scraper.py": [
+        "pytest"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_sentiment_scraper_edgecases.py": [
+        "pytest",
+        "time"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_sentiment_scraper_extended.py": [
+        "pandas",
+        "pytest",
+        "requests"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_sentiment_scraper_extraction.py": [
+        "pytest"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_sentiment_status_and_refresh.py": [
+        "pytest",
+        "requests"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_server_llm_scoring.py": [
+        "pytest"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_server_queue_endpoints.py": [
+        "json"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_server_queue_workflow.py": [
+        "json",
+        "src",
+        "threading",
+        "time"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_server_settings_store.py": [
+        "json",
+        "pytest",
+        "requests"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_settings_server_status_sources.py": [
+        "json"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_settings_store.py": [
+        "json"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_valuation_models.py": [
+        "pytest",
+        "unittest"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_zero_fcf_valuation.py": [
+        "unittest"
+      ]
+    },
+    "from_imports": {
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\dashboard_selector.py": [
+        "src",
+        "streamlit_option_menu"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\main.py": [
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\zero_fcf_valuation.py": [
+        "typing"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\check_indentation.py": [
+        "pathlib"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\check_textblob_polarity.py": [
+        "textblob"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\compare_fcf_methods.py": [
+        "decimal",
+        "math"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\compile_project.py": [
+        "pathlib"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\debug_dcf_conventions.py": [
+        "decimal",
+        "math"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\debug_run_worker_once.py": [
+        "pathlib",
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\debug_weight_test.py": [
+        "pathlib",
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\delete_reserved_nul.py": [
+        "pathlib"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\dfc_decimal_debug.py": [
+        "decimal"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\download_nltk_data.py": [
+        "__future__"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\export_project_state.py": [
+        "__future__",
+        "datetime",
+        "pathlib"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\git_prepush_check.py": [
+        "pathlib"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\growth_profile_test.py": [
+        "pathlib",
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\list_rootnames.py": [
+        "pathlib"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\migrate_settings_to_server.py": [
+        "pathlib"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\remove_reserved_files.py": [
+        "pathlib"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\run_code_check.py": [
+        "collections",
+        "typing"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\run_llm_worker.py": [
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\show_file_info.py": [
+        "pathlib"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\test_scrapers.py": [
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\scripts\\tmp_dcf_breakdown.py": [
+        "pprint"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\analysis\\interactive_dcf.py": [
+        "__future__",
+        "typing"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\analysis\\valuation_models.py": [
+        "__future__",
+        "decimal",
+        "typing"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\analysis\\zero_fcf_valuation.py": [
+        "zero_fcf_valuation"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\analysis\\__init__.py": [
+        "interactive_dcf"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\core\\cache_manager.py": [
+        "datetime",
+        "functools",
+        "typing"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\core\\config.py": [
+        "pathlib"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\core\\design_system.py": [
+        "dataclasses",
+        "enum",
+        "typing"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\core\\queue_manager.py": [
+        "__future__",
+        "datetime",
+        "pathlib",
+        "typing"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\core\\settings_store.py": [
+        "__future__",
+        "pathlib",
+        "src",
+        "typing"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\core\\wsb_quotes.py": [
+        "enum",
+        "typing"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\core\\__init__.py": [
+        "cache_manager"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\dashboards\\dashboard_crypto.py": [
+        "datetime",
+        "plotly",
+        "src",
+        "typing"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\dashboards\\dashboard_debug.py": [
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\dashboards\\dashboard_equity.py": [
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\dashboards\\dashboard_options.py": [
+        "datetime",
+        "plotly",
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\dashboards\\dashboard_portfolio.py": [
+        "pypfopt",
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\dashboards\\dashboard_predictive.py": [
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\dashboards\\dashboard_selector.py": [
+        "src",
+        "streamlit_option_menu"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\dashboards\\dashboard_settings.py": [
+        "__future__",
+        "src",
+        "typing"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\dashboards\\__init__.py": [
+        "dashboard_portfolio",
+        "dashboard_predictive",
+        "dashboard_selector"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\pipelines\\get_crypto_data.py": [
+        "datetime",
+        "src",
+        "typing"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\pipelines\\get_economic_data.py": [
+        "src",
+        "typing"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\pipelines\\get_fmp_data.py": [
+        "src",
+        "typing"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\pipelines\\get_market_data.py": [
+        "datetime",
+        "src",
+        "typing"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\pipelines\\get_political_data.py": [
+        "__future__",
+        "bs4",
+        "datetime",
+        "typing"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\pipelines\\get_sec_rss_feeds.py": [
+        "__future__",
+        "bs4",
+        "datetime",
+        "typing"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\pipelines\\get_sentiment_scraper.py": [
+        "__future__",
+        "bs4",
+        "datetime",
+        "nltk",
+        "src",
+        "textblob",
+        "typing",
+        "urllib"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\pipelines\\llm_scoring.py": [
+        "__future__",
+        "anthropic",
+        "src",
+        "typing"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\pipelines\\__init__.py": [
+        "get_market_data",
+        "get_sentiment_scraper"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\server\\llm_worker.py": [
+        "__future__",
+        "src",
+        "typing"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\server\\settings_server.py": [
+        "flask",
+        "flask_cors",
+        "pathlib",
+        "src",
+        "typing"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\utils\\helpers.py": [
+        "__future__",
+        "typing"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\src\\utils\\__init__.py": [
+        "helpers"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\conftest.py": [
+        "pathlib"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\e2e\\test_settings_flow.py": [
+        "playwright"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\e2e\\test_snapshot.py": [
+        "playwright"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_cache_manager_imports.py": [
+        "datetime",
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_get_economic_data.py": [
+        "src",
+        "unittest"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_get_fmp_data.py": [
+        "src",
+        "unittest"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_get_political_data.py": [
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_get_sec_rss_feeds.py": [
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_get_sec_rss_feeds_clean.py": [
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_interactive_dcf.py": [
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_llm_batching.py": [
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_llm_integration.py": [
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_llm_scoring_mode.py": [
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_llm_scoring_server_queue.py": [
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_llm_worker.py": [
+        "src",
+        "time"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_queue_manager.py": [
+        "pathlib",
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_sentiment_scoring.py": [
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_sentiment_scraper.py": [
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_sentiment_scraper_edgecases.py": [
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_sentiment_scraper_extended.py": [
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_sentiment_scraper_extraction.py": [
+        "src",
+        "unittest"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_sentiment_status_and_refresh.py": [
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_sentiment_weights.py": [
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_server_llm_scoring.py": [
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_server_queue_endpoints.py": [
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_server_queue_workflow.py": [
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_server_settings_store.py": [
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_settings_server_status_sources.py": [
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_settings_store.py": [
+        "pathlib",
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_valuation_models.py": [
+        "src"
+      ],
+      "C:\\Users\\603506\\Desktop\\Trevor_Python\\Stock_Platform\\tests\\unit\\test_zero_fcf_valuation.py": [
+        "src"
+      ]
+    },
+    "local_imports": [
+      "cache_manager",
+      "dashboard_portfolio",
+      "dashboard_predictive",
+      "dashboard_selector",
+      "get_market_data",
+      "get_sentiment_scraper",
+      "helpers",
+      "interactive_dcf",
+      "src",
+      "zero_fcf_valuation"
+    ],
+    "third_party_candidates": [
+      "__future__",
+      "anthropic",
+      "argparse",
+      "ast",
+      "bs4",
+      "ccxt",
+      "collections",
+      "dataclasses",
+      "datetime",
+      "decimal",
+      "enum",
+      "flask",
+      "flask_cors",
+      "functools",
+      "importlib",
+      "json",
+      "logging",
+      "math",
+      "nltk",
+      "numpy",
+      "openai",
+      "os",
+      "pandas",
+      "pathlib",
+      "playwright",
+      "plotly",
+      "pprint",
+      "py_compile",
+      "pypfopt",
+      "pytest",
+      "random",
+      "re",
+      "redis",
+      "requests",
+      "streamlit",
+      "streamlit_option_menu",
+      "subprocess",
+      "sys",
+      "tempfile",
+      "textblob",
+      "textwrap",
+      "threading",
+      "time",
+      "traceback",
+      "types",
+      "typing",
+      "unittest",
+      "urllib",
+      "uuid",
+      "yfinance",
+      "zipfile"
+    ]
+  },
+  "missing_imports": {
+    "anthropic": false,
+    "bs4": false,
+    "ccxt": false,
+    "flask": false,
+    "flask_cors": false,
+    "nltk": false,
+    "numpy": false,
+    "openai": false,
+    "pandas": false,
+    "playwright": false,
+    "pypfopt": false,
+    "pytest": false,
+    "redis": false,
+    "requests": false,
+    "streamlit": false,
+    "streamlit_option_menu": false,
+    "textblob": false,
+    "yfinance": false
+  },
+  "requirements_checks": {
+    "pandas": false,
+    "numpy": false,
+    "streamlit": false,
+    "plotly": true,
+    "requests": false,
+    "beautifulsoup4": false,
+    "lxml": false,
+    "yfinance": false,
+    "ccxt": false,
+    "alpha-vantage": false,
+    "fredapi": false,
+    "eia-python": false,
+    "finnhub-python": false,
+    "praw": false,
+    "newsapi-python": false,
+    "nltk": false,
+    "textblob": false,
+    "vaderSentiment": false,
+    "scikit-learn": false,
+    "scipy": false,
+    "statsmodels": false,
+    "prophet": false,
+    "transformers": false,
+    "torch": false,
+    "ta": false,
+    "py_vollib": false,
+    "quantstats": false,
+    "pypfopt": false,
+    "aiohttp": false,
+    "openai": false,
+    "google-generativeai": false,
+    "anthropic": false,
+    "flask": false,
+    "flask-cors": false,
+    "playwright": false,
+    "pytest-playwright": false,
+    "sqlalchemy": false,
+    "redis": false,
+    "tomli": false,
+    "python-dotenv": false,
+    "fpdf2": false
+  },
+  "pytest": {
+    "returncode": 1,
+    "stdout": "",
+    "stderr": "C:\\Users\\603506\\AppData\\Local\\Programs\\Python\\Python314\\python.exe: No module named pytest\n"
+  },
+  "linter": {
+    "tool": null,
+    "returncode": null,
+    "stdout": "",
+    "stderr": "flake8/pyflakes not installed"
+  }
+}
