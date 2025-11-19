@@ -121,23 +121,25 @@ def check_coinbase_key() -> bool:
             parsed = {}
             # Simple regex scan to find top-level keys like: COINBASE_API_KEY = "..."
             import re
-            m_key = re.search(r'COINBASE_API_KEY\s*=\s*"([^"]+)"', text)
+            m_key = re.search(r'COINBASE_API_KEY\s*=\s*"([^\"]+)"', text)
             m_secret = re.search(r'COINBASE_API_SECRET\s*=\s*"([\s\S]*?)"', text)
             if m_key:
                 parsed['COINBASE_API_KEY'] = m_key.group(1)
             if m_secret:
                 # Remove trailing newlines and spaces
                 parsed['COINBASE_API_SECRET'] = m_secret.group(1).strip()
-            if parsed.get("COINBASE_API_KEY"):
-                print("COINBASE_API_KEY found in .streamlit/secrets.toml")
-                ck = parsed.get("COINBASE_API_KEY")
-                if isinstance(ck, str) and ck.startswith("organizations/"):
-                    print("  -> NOTE: This looks like a Coinbase Cloud organization API key (starts with 'organizations/').")
-                    print("     CCXT may not support Coinbase Cloud keys. Consider creating a classic API key pair for CCXT or using Coinbase Cloud SDK.")
-                cs = parsed.get("COINBASE_API_SECRET")
-                if isinstance(cs, str) and "BEGIN" in cs and "PRIVATE KEY" in cs:
-                    print("  -> NOTE: COINBASE_API_SECRET looks like a PEM private key (BEGIN ... PRIVATE KEY). CCXT typically expects a simple API secret string, not a PEM file.")
-                return True
+
+        # Regardless of whether parsing succeeded, check the parsed dict for keys
+        if parsed.get("COINBASE_API_KEY"):
+            print("COINBASE_API_KEY found in .streamlit/secrets.toml")
+            ck = parsed.get("COINBASE_API_KEY")
+            if isinstance(ck, str) and ck.startswith("organizations/"):
+                print("  -> NOTE: This looks like a Coinbase Cloud organization API key (starts with 'organizations/').")
+                print("     CCXT may not support Coinbase Cloud keys. Consider creating a classic API key pair for CCXT or using Coinbase Cloud SDK.")
+            cs = parsed.get("COINBASE_API_SECRET")
+            if isinstance(cs, str) and "BEGIN" in cs and "PRIVATE KEY" in cs:
+                print("  -> NOTE: COINBASE_API_SECRET looks like a PEM private key (BEGIN ... PRIVATE KEY). CCXT typically expects a simple API secret string, not a PEM file.")
+            return True
     print("COINBASE_API_KEY not configured. Public data may still work, but authenticated endpoints require a key.")
     return False
 

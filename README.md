@@ -528,6 +528,16 @@ If you want to use private, authenticated Coinbase endpoints (e.g., detailed ord
 COINBASE_API_KEY = "your_coinbase_api_key"
 COINBASE_API_SECRET = "your_coinbase_api_secret"
 COINBASE_API_PASSWORD = "your_coinbase_password"  # if required
+```
+
+For local development scripts that are not part of the Streamlit application, you can also use a `.env` file at the project root. This file is ignored by Git and is a secure way to store your keys.
+
+Example `.env` file:
+
+```
+COINBASE_API_KEY = "your_coinbase_api_key"
+COINBASE_API_SECRET = "your_coinbase_api_secret"
+COINBASE_API_PASSWORD = "your_coinbase_password"  # if required
 
 Developer note: A helper script is available to help migrate a repo-root `secrets.toml` to `.streamlit/secrets.toml`.
 Usage:
@@ -541,6 +551,17 @@ COINBASE_API_PASSWORD = "your_coinbase_password"  # if required
 Important notes & troubleshooting:
 - Coinbase Cloud keys (often starting with `organizations/...`) are not the same as "classic" API keys — CCXT may not support organization-style keys for authenticated access. If you see 401 Unauthorized errors or `coinbasepro` returns 503s, consider creating a **classic API key+secret+passphrase** for CCXT, or use the official Coinbase Cloud SDK if you must use organization keys.
 - If you paste a multi-line PEM into `COINBASE_API_SECRET`, make sure to use triple-quoted TOML strings to avoid parsing errors, or use the helper script `scripts/convert_pem_secret_to_toml.py` to automatically convert it to a TOML multiline block.
+
+Fallback & operational guidance if Coinbase access fails:
+-----------------------------------------------------
+- If Coinbase connectivity or auth still fails (401/403/503), you can keep using public data sources that are already integrated and supported:
+    - CCXT public exchanges (e.g. `kraken`, `binance`) will still provide price tickers and OHLCV data as a reliable fallback.
+    - CoinGecko (free API) and yfinance provide robust fallback data for crypto and equities respectively.
+- Recommended operational approach:
+    1. Prefer classic Coinbase API keys for CCXT (plain secret) if CCXT authenticated features are required.
+    2. If you must use Coinbase Cloud keys, use `scripts/test_coinbase_cloud.py` with the JSON key and consult Coinbase Cloud docs for exact JWT claims and key permissions.
+    3. If authentication continues to fail, use the public fallback sources (Kraken/Binance/CoinGecko) as the main source for your crypto data pipelines and notify the team to revisit Coinbase integration later.
+    4. The repo includes `scripts/check_secrets_format.py` and `scripts/convert_pem_secret_to_toml.py` to help detect and fix common paste/formatting mistakes.
 
 How to create a classic Coinbase API key (manual/UI steps):
 1. Go to your Coinbase account -> *Settings* -> *API*.

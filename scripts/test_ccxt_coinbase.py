@@ -115,12 +115,12 @@ def load_dotstreamlit_secrets() -> dict:
 
 def get_coinbase_credentials_from_env_or_secrets() -> dict:
     # First try environment variables
-    creds = {
+    creds: dict[str, str | None] = {
         "apiKey": os.getenv("COINBASE_API_KEY") or os.getenv("COINBASE_KEY"),
         "secret": os.getenv("COINBASE_API_SECRET") or os.getenv("COINBASE_SECRET"),
         "password": os.getenv("COINBASE_API_PASSWORD") or os.getenv("COINBASE_PASSPHRASE")
     }
-
+    creds = {k: v for k, v in creds.items() if v}
     if all(creds.values()):
         return creds
 
@@ -130,11 +130,11 @@ def get_coinbase_credentials_from_env_or_secrets() -> dict:
     coinbase_section = secrets.get("COINBASE") or secrets.get("coinbase") or {}
 
     if isinstance(coinbase_section, dict) and coinbase_section:
-        creds = {
+        creds.update({
             "apiKey": creds.get("apiKey") or coinbase_section.get("apiKey") or coinbase_section.get("api_key"),
             "secret": creds.get("secret") or coinbase_section.get("secret") or coinbase_section.get("api_secret"),
             "password": creds.get("password") or coinbase_section.get("password") or coinbase_section.get("api_password"),
-        }
+        })
     else:
         # Maybe the file has top-level keys like `COINBASE_API_KEY` and `COINBASE_API_SECRET`.
         # Support both variants so the fallback raw parser can still be used.
@@ -144,14 +144,14 @@ def get_coinbase_credentials_from_env_or_secrets() -> dict:
             top_secret = secrets.get("COINBASE_API_SECRET") or secrets.get("COINBASE_SECRET")
             top_pass = secrets.get("COINBASE_API_PASSWORD") or secrets.get("COINBASE_PASSPHRASE")
             if top_api_key or top_secret or top_pass:
-                creds = {
+                creds.update({
                     "apiKey": creds.get("apiKey") or top_api_key,
                     "secret": creds.get("secret") or top_secret,
                     "password": creds.get("password") or top_pass,
-                }
+                })
 
-    # If still empty, return whatever we have (some may be None)
-    return creds
+    # Return only non-None values
+    return {k: v for k, v in creds.items() if v}
 
 
 def create_exchange(exchange_id: str, creds: dict | None = None) -> ccxt.Exchange:
@@ -183,6 +183,11 @@ def try_fetch_ticker_from_exchange(exchange: ccxt.Exchange, symbol: str) -> tupl
 def main() -> int:
     print("Running CCXT Coinbase connectivity test")
 
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose ccxt logging (shows raw requests)")
+    args = parser.parse_args()
+
     creds = get_coinbase_credentials_from_env_or_secrets()
     have_creds = bool(creds.get("apiKey") and creds.get("secret"))
 
@@ -198,7 +203,7 @@ def main() -> int:
                 print("Note: The key looks like a Coinbase Cloud organization key (starts with 'organizations/').")
                 print("CCXT may not support Coinbase Cloud keys directly; if you need authenticated CCXT access via Coinbase, use a classic API key/secret/password or the exchange-specific format.")
         secret_preview = creds.get("secret") or ""
-        if secret_preview and "BEGIN EC PRIVATE KEY" in secret_preview:
+        if secret_preview and ("BEGIN" in secret_preview and "PRIVATE KEY" in secret_preview):
             print("Note: The COINBASE_API_SECRET appears to be a PEM private key (BEGIN EC PRIVATE KEY). CCXT typically expects an API secret string, not a PEM file. Verify your secret format.")
     else:
         print("No Coinbase credentials found in env or .streamlit/secrets.toml — trying public fallback exchanges.")
@@ -212,6 +217,8 @@ def main() -> int:
         for eid in ["coinbasepro", "coinbase"]:
             try:
                 exchange = create_exchange(eid, creds)
+                if args.verbose:
+                    exchange.verbose = True
             except Exception as e:
                 tried_results.append((eid, False, None, f"Init error: {e}"))
                 continue
@@ -233,6 +240,8 @@ def main() -> int:
     for eid in public_exchanges:
         try:
             exchange = create_exchange(eid, None)
+            if args.verbose:
+                exchange.verbose = True
         except Exception as e:
             tried_results.append((eid, False, None, f"Init error: {e}"))
             continue
@@ -254,6 +263,9 @@ def main() -> int:
     if not have_creds:
         print("If you need authenticated Coinbase features, add these keys to .streamlit/secrets.toml or environment variables:")
         print("COINBASE_API_KEY, COINBASE_API_SECRET, COINBASE_API_PASSWORD")
+
+    # Final operational note: fallback strategy
+    print('\nNOTE: If Coinbase connectivity or auth consistently fails, use supported public crypto data sources (Kraken, Binance, CoinGecko) as the pipeline primary for now and revisit Coinbase integration later. The system already supports CCXT-based fallbacks to public exchanges for continuity.')
 
     return 2
 

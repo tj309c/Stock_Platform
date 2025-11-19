@@ -15,6 +15,8 @@ from src.core.cache_manager import CacheManager
 from src.core.config import AppConfig
 import logging
 
+logger = logging.getLogger(__name__)
+
 
 class CryptoDataPipeline:
     """
@@ -47,8 +49,16 @@ class CryptoDataPipeline:
                 if self.exchange_id.lower() == 'coinbase':
                     if cfg.coinbase_api_key:
                         opts['apiKey'] = cfg.coinbase_api_key
+                    # Detect if the secret looks like a Cloud PEM key (COINBASE Cloud JSON key / PEM)
                     if cfg.coinbase_api_secret:
-                        opts['secret'] = cfg.coinbase_api_secret
+                        sec = cfg.coinbase_api_secret
+                        # Many PEMs are pasted with BEGIN/END markers; CCXT expects a plain classic secret.
+                        if isinstance(sec, str) and ('BEGIN' in sec and 'PRIVATE KEY' in sec): # type: ignore
+                            logging.getLogger(__name__).warning(
+                                "Coinbase secret appears to be a PEM / Cloud key. Skipping adding it to CCXT opts."
+                            )
+                        else:
+                            opts['secret'] = cfg.coinbase_api_secret
                     if cfg.coinbase_api_password:
                         opts['password'] = cfg.coinbase_api_password
                 self._exchange = exchange_class(opts)
@@ -58,6 +68,29 @@ class CryptoDataPipeline:
                 logging.getLogger(__name__).debug("Falling back to coinbase without credentials: %s", e)
                 self._exchange = ccxt.coinbase({'enableRateLimit': True})
         return self._exchange
+
+    def _attempt_fallback_fetch(self, fallback_exchanges, func_name: str, *args, **kwargs):
+        """
+        Attempt a fetch operation (e.g., fetch_ohlcv) across fallback_exchanges. func_name is the method to call.
+        Returns result from the first successful fallback or None.
+        """
+        for ex_id in fallback_exchanges:
+            logger.debug(f"Attempting fallback fetch on '{ex_id}' for function '{func_name}'")
+            try:
+                ex_class = getattr(ccxt, ex_id)
+                fallback_ex = ex_class({'enableRateLimit': True})
+                func = getattr(fallback_ex, func_name)
+                try:
+                    res = func(*args, **kwargs)
+                    logger.info(f"Fallback to '{ex_id}' succeeded for '{func_name}' with args: {args}, kwargs: {kwargs}")
+                    return res
+                except Exception as e_fetch:
+                    logger.debug(f"Fallback fetch from '{ex_id}' failed for function '{func_name}': {e_fetch}")
+                    continue
+            except Exception as e_init:
+                logger.warning(f"Failed to initialize fallback exchange '{ex_id}': {e_init}")
+                continue
+        return None
 
     @CacheManager.cache_market_data
     def get_crypto_price(
@@ -77,33 +110,29 @@ class CryptoDataPipeline:
         Returns:
             DataFrame with OHLCV data or None if error
         """
+        logger.debug(f"get_crypto_price called for {symbol}, timeframe={timeframe}, limit={limit}")
         try:
             # Fetch OHLCV data
             try:
+                logger.debug(f"Calling primary exchange '{self.exchange_id}' to fetch OHLCV for {symbol}")
                 ohlcv = _self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
-            except AuthenticationError as ae:
-                # Fallback to public exchange if initial exchange requires auth
+            except (AuthenticationError, IndexError) as ae:
+                logger.warning(f"Primary exchange '{self.exchange_id}' failed for {symbol}: {repr(ae)}. Attempting public fallbacks.")
+                # Fallback to public exchange if initial exchange requires auth or index error
                 fallback_exchanges = ['binance', 'kraken', 'coinbasepro']
                 symbol_variants = [symbol]
                 if '/USD' in symbol and 'USDT' not in symbol:
                     symbol_variants.append(symbol.replace('/USD', '/USDT'))
                 ohlcv = None
-                for ex_id in fallback_exchanges:
-                    try:
-                        ex_class = getattr(ccxt, ex_id)
-                        fallback_ex = ex_class({'enableRateLimit': True})
-                        for variant in symbol_variants:
-                            try:
-                                ohlcv = fallback_ex.fetch_ohlcv(variant, timeframe, limit=limit)
-                                st.info(f"Using {ex_id} as fallback to fetch ohlcv for {variant}.")
-                                symbol = variant
-                                break
-                            except Exception:
-                                continue
-                        if ohlcv:
-                            break
-                    except Exception:
-                        continue
+                for variant in symbol_variants:
+                    logger.debug(f"Attempting fallback fetch for symbol variant '{variant}'")
+                    # Correctly call the helper method on the `_self` instance
+                    res = _self._attempt_fallback_fetch(fallback_exchanges, 'fetch_ohlcv', variant, timeframe, limit=limit)
+                    ohlcv = res
+                    if ohlcv:
+                        st.info(f"Using fallback exchange to fetch ohlcv for {variant}.")
+                        symbol = variant
+                        break
 
             if not ohlcv:
                 st.warning(f"No data found for {symbol}")
@@ -158,7 +187,7 @@ class CryptoDataPipeline:
         try:
             try:
                 ticker = _self.exchange.fetch_ticker(symbol)
-            except AuthenticationError as ae:
+            except (AuthenticationError, IndexError) as ae:
                 # Authentication errors from ccxt can indicate that the exchange requires API credentials
                 msg = str(ae)
                 st.error(f"Authentication error fetching ticker for {symbol}: {msg}")
@@ -168,32 +197,24 @@ class CryptoDataPipeline:
                 symbol_variants = [symbol]
                 if '/USD' in symbol and 'USDT' not in symbol:
                     symbol_variants.append(symbol.replace('/USD', '/USDT'))
-                for ex_id in fallback_exchanges:
-                    try:
-                        ex_class = getattr(ccxt, ex_id)
-                        fallback_ex = ex_class({'enableRateLimit': True})
-                        for variant in symbol_variants:
-                            try:
-                                ticker = fallback_ex.fetch_ticker(variant)
-                                st.info(f"Using {ex_id} as fallback to fetch ticker for {variant}.")
-                                return {
-                                    'symbol': ticker.get('symbol'),
-                                    'last': ticker.get('last'),
-                                    'bid': ticker.get('bid'),
-                                    'ask': ticker.get('ask'),
-                                    'high': ticker.get('high'),
-                                    'low': ticker.get('low'),
-                                    'volume': ticker.get('quoteVolume'),
-                                    'base_volume': ticker.get('baseVolume'),
-                                    'change': ticker.get('change'),
-                                    'percentage': ticker.get('percentage'),
-                                    'timestamp': ticker.get('timestamp'),
-                                    'datetime': ticker.get('datetime'),
-                                }
-                            except Exception:
-                                continue
-                    except Exception:
-                        continue
+                for variant in symbol_variants:
+                    ticker = self._attempt_fallback_fetch(fallback_exchanges, 'fetch_ticker', variant)
+                    if ticker:
+                        st.info(f"Using fallback exchange to fetch ticker for {variant}.")
+                        return {
+                            'symbol': ticker.get('symbol'),
+                            'last': ticker.get('last'),
+                            'bid': ticker.get('bid'),
+                            'ask': ticker.get('ask'),
+                            'high': ticker.get('high'),
+                            'low': ticker.get('low'),
+                            'volume': ticker.get('quoteVolume'),
+                            'base_volume': ticker.get('baseVolume'),
+                            'change': ticker.get('change'),
+                            'percentage': ticker.get('percentage'),
+                            'timestamp': ticker.get('timestamp'),
+                            'datetime': ticker.get('datetime'),
+                        }
                 return None
 
             return {

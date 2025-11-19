@@ -20,6 +20,22 @@ if ROOT not in sys.path:
 os.environ['PYTEST_DISABLE_PLUGIN_AUTOLOAD'] = '1'
 
 def main():
+    # Run the secrets format checker (optional) and fail early if misconfigured.
+    try:
+        from subprocess import run, PIPE
+        check_cmd = [sys.executable, os.path.join(ROOT, 'scripts', 'check_secrets_format.py')]
+        p = run(check_cmd, stdout=PIPE, stderr=PIPE, text=True)
+        if p.returncode != 0:
+            print('Secrets format checker returned non-zero exit code; failing early.')
+            print(p.stdout)
+            print(p.stderr)
+            return p.returncode
+    except Exception:
+        # Don't fail tests if the checker itself fails on missing deps—just print warning
+        import traceback
+        print('Warning: secrets format check failed to run:')
+        traceback.print_exc()
+
     import pytest
     args = ['-q']
     if os.environ.get('DEBUG_TESTS') == '1' or os.environ.get('DEBUG') == '1':
